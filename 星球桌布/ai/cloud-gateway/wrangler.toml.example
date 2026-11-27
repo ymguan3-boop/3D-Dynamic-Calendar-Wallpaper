@@ -1,0 +1,24 @@
+# 小公主 AI Lite — L3 雲端閘道設定範本（不含任何金鑰）
+# 使用方式（需使用者自行決定並取得授權；公務電腦請勿啟用）：
+#   1. 複製成 wrangler.toml，填入自己的 KV namespace id
+#   2. npx wrangler kv namespace create RATE   → 把 id 貼到下面
+#   3. npx wrangler deploy
+#   4. 在要使用的電腦上設定原則（系統管理員權限）：
+#        HKLM\SOFTWARE\Policies\PlanetWallpaper  AllowCloudAI = 1 (DWORD)
+#        HKLM\SOFTWARE\Policies\PlanetWallpaper  CloudGatewayUrl = "https://<你的 worker>.workers.dev/v1/chat" (REG_SZ)
+#      再到「星球居民及行事曆管理 → 和小公主說話」選「個人雲端」並同意。
+name = "princess-ai-gateway"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+
+[ai]
+binding = "AI"
+
+[[kv_namespaces]]
+binding = "RATE"
+id = "<填入你的 KV namespace id>"
+
+[vars]
+MODEL = "@cf/meta/llama-3.1-8b-instruct"
+LIMIT_PER_MINUTE = "6"
+LIMIT_PER_DAY = "200"

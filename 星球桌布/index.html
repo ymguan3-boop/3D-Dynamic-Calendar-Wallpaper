@@ -89,6 +89,13 @@
   #credit{position:fixed;right:28px;bottom:58px;z-index:4;pointer-events:none;font-size:13px;letter-spacing:.22em;
     color:rgba(253,243,223,.72);font-family:"Noto Serif TC","PMingLiU",Georgia,serif;text-shadow:0 1px 6px rgba(0,0,0,.6)}
   #ui{bottom:96px!important}
+  /* 小公主說話字幕（語音實際播放時才出現；聲音只在對話視窗播放一次） */
+  #princessSay{position:fixed;right:4vw;bottom:24vh;z-index:4;max-width:24vw;pointer-events:none;padding:1.1vh 1vw;border-radius:14px;
+    background:rgba(251,246,234,.93);color:#3e2c20;border:1px dashed #bfa27b;outline:1px solid rgba(91,58,36,.18);outline-offset:3px;
+    font:500 clamp(13px,1.15vw,22px)/1.55 "Microsoft JhengHei",sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.35);
+    opacity:0;transform:translateY(8px);transition:opacity .35s,transform .35s}
+  #princessSay.on{opacity:1;transform:none}
+  #princessSay b{display:block;font:600 .78em "Noto Serif TC","PMingLiU",Georgia,serif;letter-spacing:.16em;color:#a8432f;margin-bottom:.2em}
 
   /* 桌面月曆（只有行程和詳情可互動） */
   #cal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:29vw;height:56vh;display:flex;flex-direction:column;gap:1.1vh;
@@ -149,6 +156,7 @@
 <body>
 <div id="err">星球載入失敗（three.js 未能載入）</div>
 <div id="credit">創作人 官毅明</div>
+<div id="princessSay" aria-live="polite"><b>小公主</b><span></span></div>
 <div id="cal" aria-label="月曆">
   <div class="cal-head">
     <div class="cal-m" id="calM"></div>
@@ -1475,9 +1483,11 @@ if (SEED) {
    只有瀏覽器儲存裡沒有的項目才從檔案補回，避免蓋掉這次執行中較新的資料。 */
 const PERSIST_KEYS = ['planet-wallpaper-planet-v1', 'planet-wallpaper-calendar', 'planet-wallpaper-display'];
 const HAS_SERVER = location.protocol === 'http:' && location.hostname === '127.0.0.1';
+// 本機服務在送出頁面時填入的工作階段金鑰；/data 與 /ai/* 都要帶上，其他網站拿不到
+const PLANET_SESSION = '__PLANET_SESSION__';
 if (HAS_SERVER) {
   try {
-    const d = await (await fetch('/data', { cache: 'no-store' })).json();
+    const d = await (await fetch('/data', { cache: 'no-store', headers: { 'X-Planet-Session': PLANET_SESSION } })).json();
     for (const k of PERSIST_KEYS) if (typeof d[k] === 'string' && localStorage.getItem(k) === null) localStorage.setItem(k, d[k]);
   } catch (e) { /* 讀不到就用預設值 */ }
 }
@@ -1488,8 +1498,8 @@ function pushData(beacon) {
   const s = snapshot();
   if (s === lastPushed || s === '{}') return;
   lastPushed = s;
-  if (beacon) navigator.sendBeacon('/data', new Blob([s], { type: 'application/json' }));
-  else fetch('/data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: s }).catch(() => { lastPushed = null; });
+  fetch('/data', { method: 'POST', keepalive: !!beacon, headers: { 'Content-Type': 'application/json', 'X-Planet-Session': PLANET_SESSION }, body: s })
+    .then(r => { if (!r.ok) lastPushed = null; }).catch(() => { lastPushed = null; });
 }
 setInterval(() => pushData(false), 2000);
 addEventListener('pagehide', () => { save(); pushData(true); });
@@ -1498,9 +1508,12 @@ addEventListener('pagehide', () => { save(); pushData(true); });
 const CMD_KEY = 'planet-wallpaper-cmds';
 function runCmd(c) {
   if (!c) return;
-  if (['cal-add', 'cal-remove', 'cal-view'].includes(c.a)) {
+  if (['cal-add', 'cal-update', 'cal-remove', 'cal-view'].includes(c.a)) {
     const calendar = loadCal();
+    // 小公主的變更已由本機服務驗證並經使用者確認；行事曆在確認後又被改過就不套用（服務端也會擋）
+    if (c.ai && c.rev !== calendar.rev) { console.warn('行事曆已變更，略過這次小公主的修改'); return; }
     if (c.a === 'cal-add' && c.v && !calendar.events.some(event => event.id === c.v.id)) calendar.events.push(c.v);
+    if (c.a === 'cal-update' && c.v) calendar.events = calendar.events.map(event => event.id === c.v.id ? { ...event, ...c.v } : event);
     if (c.a === 'cal-remove') calendar.events = calendar.events.filter(event => event.id !== c.v);
     if (c.a === 'cal-view' && c.v) calendar.view = c.v;
     saveCal(calendar);
@@ -1630,7 +1643,7 @@ function showCalDetails(trigger, pinned, index = 0) {
   const list = calTriggers.get(trigger), event = list[index];
   trigger.setAttribute('aria-expanded', String(pinned));
   document.getElementById('calDetailsWhen').textContent = `${event.date} · ${event.time || '未指定時間'}`;
-  calDetailsTitle.textContent = event.title || '';
+  calDetailsTitle.textContent = calShownTitle(event);
   calDetailsTitle.style.setProperty('--c', calEventColor(event));
   calDetailsNav.hidden = list.length < 2 || !pinned;
   calDetailsNav.firstElementChild.disabled = index === 0;
@@ -1718,6 +1731,9 @@ addEventListener('keydown', e => {
   if (e.key === 'Escape') closeCalDetails();
 });
 let calRaw = undefined, calToday = '';
+// 「桌面隱藏行程名稱」：桌布只顯示時間與「行程」，名稱留在管理視窗
+let maskTitles = false;
+const calShownTitle = e => maskTitles ? '行程' : (e.title || '');
 function renderCal(force) {
   let raw = null;
   try { raw = localStorage.getItem(CAL_KEY); } catch (e) { raw = null; }
@@ -1755,7 +1771,7 @@ function renderCal(force) {
     if (d.getMonth() === m) monthCount += list.length;
     const max = weeks > 5 ? 2 : 3;
     list.slice(0, max).forEach(e => {
-      const ev = createCalTrigger('cal-ev', (e.time ? e.time + ' ' : '') + (e.title || ''), [e]);
+      const ev = createCalTrigger('cal-ev', (e.time ? e.time + ' ' : '') + calShownTitle(e), [e]);
       ev.style.setProperty('--c', calEventColor(e));
       cell.append(ev);
     });
@@ -1770,6 +1786,42 @@ renderCal(true);
 setInterval(() => renderCal(false), 1000);
 addEventListener('storage', e => { if (e.key === CAL_KEY) renderCal(true); });
 
+/* ---------- 小公主說話：對話視窗播放語音時，桌布同步字幕、表情與動作 ---------- */
+if (desktopToken) {
+  const sayBox = document.getElementById('princessSay'), sayText = sayBox.querySelector('span');
+  let lastSeq = -1, speakingNow = false, hideTimer = 0, feedBusy = false;
+  async function pollFeed() {
+    if (feedBusy || document.hidden) return;
+    feedBusy = true;
+    try {
+      const r = await fetch('/ai/feed', { cache: 'no-store', headers: { 'X-Desktop-Input': desktopToken } });
+      if (!r.ok) return;
+      const f = await r.json();
+      if (f.maskTitles !== maskTitles) { maskTitles = !!f.maskTitles; renderCal(true); }
+      const sp = f.speech;
+      if (!sp || typeof sp.seq !== 'number' || Date.now() - sp.at > 60000) return;
+      if (sp.seq === lastSeq && sp.speaking === speakingNow) {
+        if (speakingNow && prince.model) prince.model.express('talk', 1.2);   // 播放中持續張嘴說話
+        return;
+      }
+      const fresh = sp.seq !== lastSeq;
+      lastSeq = sp.seq; speakingNow = !!sp.speaking;
+      clearTimeout(hideTimer);
+      if (speakingNow) {
+        if (f.subtitles) { sayText.textContent = sp.text; sayBox.classList.add('on'); }
+        if (prince.model) prince.model.express('talk', 1.2);
+        if (fresh && sp.gesture) princeDo(sp.gesture, 2.6);
+      } else {
+        if (prince.model) prince.model.express(sp.emotion || 'happy', 2.4);
+        if (f.subtitles && fresh) { sayText.textContent = sp.text; sayBox.classList.add('on'); }
+        hideTimer = setTimeout(() => sayBox.classList.remove('on'), 3500);
+      }
+    } catch (e) { /* 服務暫停時下次再試 */ }
+    finally { feedBusy = false; }
+  }
+  setInterval(pollFeed, 350);
+}
+
 /* ---------- 面板分頁：星球居民 / 行事曆 ---------- */
 panel.querySelectorAll('.tab').forEach(b => b.onclick = () => {
   panel.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === b));
@@ -1783,9 +1835,11 @@ const validYmd = s => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(parseYmd(s));
 function loadCal() {
   let c = {};
   try { c = JSON.parse(localStorage.getItem(CAL_KEY) || '{}') || {}; } catch (e) { c = {}; }
-  return { events: Array.isArray(c.events) ? c.events : [], view: c.view && c.view.mode === 'fixed' ? c.view : { mode: 'auto' } };
+  return { events: Array.isArray(c.events) ? c.events : [], view: c.view && c.view.mode === 'fixed' ? c.view : { mode: 'auto' },
+           rev: Number.isInteger(c.rev) ? c.rev : 0 };
 }
-function saveCal(c) { try { localStorage.setItem(CAL_KEY, JSON.stringify(c)); } catch (e) { /* 忽略 */ } renderCal(true); renderCalEditor(); }
+// rev 每次存檔加一：小公主提出的修改只會套用在使用者確認時看到的那個版本上
+function saveCal(c) { c.rev = (Number.isInteger(c.rev) ? c.rev : 0) + 1; try { localStorage.setItem(CAL_KEY, JSON.stringify(c)); } catch (e) { /* 忽略 */ } renderCal(true); renderCalEditor(); }
 function calViewYM(c) { const n = new Date(); return c.view.mode === 'fixed' ? [c.view.y, c.view.m] : [n.getFullYear(), n.getMonth()]; }
 function calShift(delta) {
   const c = loadCal(), [y, m] = calViewYM(c), d = new Date(y, m + delta, 1);

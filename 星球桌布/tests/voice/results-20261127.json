@@ -1,0 +1,10 @@
+{
+  "note": "T02 實測結果（2026-11-27，本機 i7-13700K）。音檔為 Windows 本機聲線合成（Hanhan、Yating 女聲，Zhiwei 男聲），非真人錄音；noisy 為加入 15 dB SNR 寬頻噪音。辨識使用產品相同的 vosk.js 0.0.8、vosk-model-small-cn-0.22、opencc-js 1.4.2 與 ai/local-intent.js，在 Chromium 系瀏覽器執行。",
+  "runs": [
+    { "set": "main（30 句，用來調整規則）", "parser": "調整前", "clean": { "clips": 90, "CER": 7.31, "intentAccuracy": 91.11 }, "noisy": { "clips": 90, "CER": 13.16, "intentAccuracy": 82.22 }, "all": { "clips": 180, "CER": 10.23, "intentAccuracy": 86.67 } },
+    { "set": "holdout（20 句，依 main 調整後首次測試，之後也用來調整）", "parser": "第一次調整後", "clean": { "clips": 60, "CER": 8.74, "intentAccuracy": 78.33 }, "noisy": { "clips": 60, "CER": 16.06, "intentAccuracy": 65.0 }, "all": { "clips": 120, "CER": 12.4, "intentAccuracy": 71.67 } },
+    { "set": "holdout2（20 句，從未用來調整）", "parser": "第二次調整後、測試前凍結", "clean": { "clips": 60, "CER": 6.74, "intentAccuracy": 85.0 }, "noisy": { "clips": 60, "CER": 15.99, "intentAccuracy": 80.0 }, "all": { "clips": 120, "CER": 11.37, "intentAccuracy": 82.5 } },
+    { "set": "main（30 句）", "parser": "最終版（已用 main 調整，數字偏樂觀）", "clean": { "clips": 90, "CER": 7.31, "intentAccuracy": 97.78 }, "noisy": { "clips": 90, "CER": 13.16, "intentAccuracy": 88.89 }, "all": { "clips": 180, "CER": 10.23, "intentAccuracy": 93.33 }, "modelLoadMs": 672, "realTimeFactor": 0.635 }
+  ],
+  "verdict": "未達標：在未用於調整的 holdout2 上意圖正確率 82.5%（目標 ≥90%）。"
+}

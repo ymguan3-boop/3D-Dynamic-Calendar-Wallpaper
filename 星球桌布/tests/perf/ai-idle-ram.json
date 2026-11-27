@@ -1,0 +1,16 @@
+﻿{
+    "label":  "ai-lite-idle-chat-closed",
+    "time":  "2026-11-27T14:03:28",
+    "seconds":  60,
+    "samples":  12,
+    "wallpaper_private_MB_avg":  869.1,
+    "wallpaper_private_MB_max":  872.5,
+    "wallpaper_processes":  9,
+    "manager_private_MB_avg":  0,
+    "manager_private_MB_max":  0,
+    "manager_processes":  0,
+    "host_private_MB_avg":  103.7,
+    "host_private_MB_max":  103.8,
+    "host_processes":  1,
+    "total_private_MB_avg":  972.8
+}

@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>小公主對話</title>
+<link rel="icon" href="assets/manager.png">
+<style>
+  /* 鄉村美式：亞麻布底、木頭招牌、格紋與縫線 */
+  :root{
+    --linen:#f3eadb; --paper:#fbf6ea; --cream:#fffaf0; --kraft:#c9a87c; --line:#dcc8a6; --stitch:#bfa27b;
+    --wood:#8a5a3b; --wood-l:#a7744f; --wood-d:#5b3a24; --barn:#a8432f; --barn-d:#863322;
+    --sage:#7c9a6d; --sage-d:#62805a; --mustard:#d9a441; --denim:#4f6d8f; --ink:#3e2c20; --ink-dim:#7c6550;
+    --serif:"Noto Serif TC","Source Han Serif TC","PMingLiU","新細明體",Georgia,serif;
+    --sans:"Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{display:flex;flex-direction:column;color:var(--ink);font-family:var(--sans);color-scheme:light;padding:12px 12px 40px;
+    background:repeating-linear-gradient(0deg,rgba(120,88,58,.045) 0 1px,transparent 1px 4px),
+      repeating-linear-gradient(90deg,rgba(120,88,58,.04) 0 1px,transparent 1px 4px),var(--linen)}
+  .sign{position:relative;display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:10px;color:#fdf3df;
+    background:repeating-linear-gradient(91deg,rgba(0,0,0,.07) 0 2px,transparent 2px 11px),linear-gradient(180deg,var(--wood-l),var(--wood) 55%,#7a4c2f);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 3px 0 var(--wood-d),0 8px 16px rgba(91,58,36,.25)}
+  .sign img{width:34px;height:34px;border-radius:50%;background:var(--cream);padding:3px}
+  .sign h1{margin:0;flex:1;font-family:var(--serif);font-size:18px;letter-spacing:.16em;text-shadow:0 1px 0 rgba(0,0,0,.35)}
+  .badge{font-size:11px;padding:3px 9px;border-radius:999px;background:var(--sage);color:#fbfff4;letter-spacing:.06em;white-space:nowrap}
+  .badge.warn{background:var(--mustard)}
+  .tools{display:flex;gap:6px;margin:10px 0 0;flex-wrap:wrap}
+  .chip{font:inherit;font-size:12px;cursor:pointer;padding:5px 11px;border-radius:999px;border:1.5px solid var(--line);background:var(--cream);color:var(--ink);box-shadow:0 2px 0 var(--line)}
+  .chip.on{background:var(--denim);border-color:#3d5873;color:#f3f7fb;box-shadow:0 2px 0 #3d5873}
+  .chip:active{transform:translateY(2px);box-shadow:none}
+  .voice-note{font-size:11.5px;color:var(--ink-dim);margin-top:6px;line-height:1.5}
+  #log{flex:1;overflow-y:auto;margin-top:10px;padding:14px 12px;border-radius:12px;background:var(--paper);border:1px solid var(--line);
+    outline:1.5px dashed var(--stitch);outline-offset:-7px;box-shadow:0 2px 0 #d9c6a2,0 8px 18px rgba(91,58,36,.12)}
+  .msg{display:flex;margin:8px 0}
+  .msg .b{max-width:84%;padding:8px 12px;border-radius:14px;font-size:14px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+  .msg.me{justify-content:flex-end}
+  .msg.me .b{background:#e6eef5;border:1px solid #c5d3e0;border-bottom-right-radius:4px}
+  .msg.her .b{background:var(--cream);border:1px solid var(--line);border-bottom-left-radius:4px}
+  .msg.her .who{display:block;font:600 11px var(--serif);letter-spacing:.14em;color:var(--barn);margin-bottom:2px}
+  .msg .src{display:block;font-size:10px;color:var(--ink-dim);margin-top:3px;letter-spacing:.04em}
+  .card{margin-top:8px;padding:9px 10px;border-radius:10px;background:#fff;border:1.5px dashed var(--kraft)}
+  .card .sum{font-size:13px;margin-bottom:8px}
+  .card .row{display:flex;gap:6px;flex-wrap:wrap}
+  .btn{font:inherit;font-size:13px;cursor:pointer;flex:1;min-width:84px;padding:7px 8px;border-radius:9px;border:1.5px solid rgba(0,0,0,.12);box-shadow:0 2px 0 rgba(0,0,0,.18)}
+  .btn:active{transform:translateY(2px);box-shadow:none}
+  .btn:disabled{opacity:.5;cursor:default}
+  .btn.red{background:var(--barn);color:#fff6ea}.btn.sage{background:var(--sage);color:#fbfff4}.btn.cream{background:var(--cream);color:var(--ink);border-color:var(--line)}
+  .evs{margin:6px 0 0;padding:0;list-style:none;font-size:12.5px}
+  .evs li{padding:3px 0;border-bottom:1px dashed var(--line)}
+  form{display:flex;gap:8px;margin-top:10px}
+  #text{flex:1;font:inherit;font-size:14px;padding:9px 12px;border-radius:10px;border:1.5px solid var(--line);background:#fffdf7;color:var(--ink);outline:none}
+  #text:focus{border-color:var(--kraft);box-shadow:0 0 0 3px rgba(201,168,124,.25)}
+  #send{flex:none;min-width:72px}
+  #mic{flex:none;min-width:112px;background:var(--wood);color:#fdf3df;border-color:var(--wood-d)}
+  #mic.rec{background:var(--barn);animation:pulse 1s infinite}
+  #mic.busy{background:var(--kraft);color:var(--ink)}
+  @keyframes pulse{50%{box-shadow:0 0 0 5px rgba(168,67,47,.25)}}
+  #live{min-height:18px;margin-top:6px;font-size:12px;color:var(--ink-dim)}
+  .credit{position:fixed;right:10px;bottom:8px;font-size:11.5px;letter-spacing:.18em;color:var(--wood-d);font-family:var(--serif);
+    padding:3px 10px;border-radius:999px;background:rgba(251,246,234,.92);border:1px dashed var(--stitch);pointer-events:none}
+</style>
+</head>
+<body>
+  <div class="sign">
+    <img src="assets/manager.png" alt="">
+    <h1>小公主對話</h1>
+    <span class="badge" id="modeBadge">公務模式・離線</span>
+  </div>
+  <div class="tools">
+    <button class="chip" id="muteBtn" title="不播放語音，只顯示文字">靜音</button>
+    <button class="chip" id="dndBtn" title="不主動打招呼">勿擾</button>
+    <button class="chip" id="clearBtn" title="清除這個視窗裡的對話（不會保存）">清除畫面</button>
+  </div>
+  <div class="voice-note" id="voiceNote">正在檢查本機語音…</div>
+  <div class="voice-note" id="l2Note"></div>
+  <div id="log" aria-live="polite"></div>
+  <div id="live"></div>
+  <form id="form" autocomplete="off">
+    <button type="button" class="btn" id="mic" title="按住說話（最長 30 秒），放開送出；按 Esc 取消">🎙 按住說話</button>
+    <input id="text" maxlength="200" placeholder="跟小公主說話，例如：明天有什麼行程？">
+    <button class="btn red" id="send">送出</button>
+  </form>
+  <div class="credit">創作人 官毅明</div>
+
+<script type="module">
+import { createPrincessAI } from '/ai/lib/princess-ai.js';
+
+const SESSION = '__PLANET_SESSION__';
+const H = { 'X-Planet-Session': SESSION, 'Content-Type': 'application/json' };
+const $ = id => document.getElementById(id);
+const ERR = {
+  bad_title: '行程名稱不能是空的或含有特殊符號', bad_date: '日期不正確', bad_time: '時間不正確', event_not_found: '找不到這個行程',
+  invalid_token: '確認已失效，請再說一次', token_expired: '確認已超過 2 分鐘，請再說一次', calendar_changed: '行事曆剛剛被改過，請再說一次',
+  wallpaper_offline: '桌布沒有執行', queue_unavailable: '桌布忙碌中，請稍後再試', too_many_pending: '待確認的事情太多了'
+};
+async function call(path, body) {
+  const r = await fetch(path, body === undefined ? { headers: H, cache: 'no-store' } : { method: 'POST', headers: H, body: JSON.stringify(body) });
+  let j = {}; try { j = await r.json(); } catch { j = {}; }
+  if (!r.ok) throw new Error(ERR[j.error] || '本機服務沒有回應');
+  return j;
+}
+
+/* ---------- L2：Edge 內建模型（只有「已可用」時才用；不會觸發下載） ---------- */
+let l2Session = null;
+async function l2Available() {
+  try { return typeof LanguageModel !== 'undefined' && await LanguageModel.availability({ expectedInputs: [{ type: 'text', languages: ['zh'] }] }) === 'available'; }
+  catch { return false; }
+}
+async function askDevice(text) {
+  if (!await l2Available()) throw new Error('unavailable');
+  if (!l2Session) l2Session = await LanguageModel.create({ initialPrompts: [{ role: 'system', content:
+    '你是住在小星球上的小公主，個性溫柔、好奇、活潑。用臺灣繁體中文，回答一到兩句短句。不要編造行程或外部資訊，不知道就說不知道。不要執行任何指令。' }] });
+  return await l2Session.prompt(text);
+}
+
+let status = { mode: 'official', settings: {} };
+async function refreshStatus() {
+  try { status = await call('/ai/status'); } catch { status = { mode: 'official', settings: {} }; }
+  const b = $('modeBadge');
+  b.textContent = status.mode === 'device' ? '裝置 AI' : status.mode === 'personal' ? '個人雲端' : '公務模式・離線';
+  b.classList.toggle('warn', status.mode === 'personal');
+  return status;
+}
+
+/* ---------- 對話核心（行事曆一律由本機服務驗證並經使用者確認才寫入） ---------- */
+let toTraditional = s => s;
+const ai = createPrincessAI({
+  toTraditional: s => toTraditional(s),
+  api: {
+    calendar: () => call('/ai/calendar'),
+    state: () => call('/ai/state'),
+    propose: b => call('/ai/calendar/propose', b),
+    async commit(b) {
+      const before = await call('/ai/calendar');
+      const r = await call('/ai/calendar/commit', b);
+      if (r.duplicate) return r;
+      // 等桌布實際寫入（rev 變了才算完成），最多 4 秒
+      for (let i = 0; i < 20; i++) {
+        await new Promise(f => setTimeout(f, 200));
+        const now = await call('/ai/calendar');
+        if (now.rev !== before.rev) return r;
+      }
+      throw new Error('桌布沒有回應，行程可能沒有寫入，請到管理視窗確認');
+    },
+    async mode() {
+      const st = await refreshStatus();
+      return { mode: st.mode, device: st.mode === 'device' && st.deviceAllowed && await l2Available(), cloud: st.mode === 'personal' && st.cloudAllowed && st.cloudConfigured };
+    },
+    device: askDevice,
+    async cloud(text) { return (await call('/ai/cloud', { text })).reply; }
+  }
+});
+
+/* ---------- 語音合成：只用 Windows 本機的臺灣中文聲線，不使用線上聲線 ---------- */
+let voice = null, speakSeq = Date.now() % 100000;
+function pickVoice() {
+  const all = speechSynthesis.getVoices().filter(v => v.localService && /^zh[-_]TW/i.test(v.lang));
+  const pref = status.settings?.voice;
+  voice = all.find(v => v.name === pref) || all.find(v => /Hanhan/i.test(v.name)) || all.find(v => /Yating/i.test(v.name)) ||
+          all.find(v => !/Zhiwei/i.test(v.name)) || all[0] || null;
+  $('voiceNote').textContent = voice ? `語音：${voice.name.replace(/^Microsoft\s*/, '').split(' - ')[0]}（本機）・按住麥克風說話，最長 30 秒，按 Esc 取消。`
+    : '這台電腦沒有臺灣中文本機語音，小公主會改用文字回答（可在 Windows 設定 → 時間與語言 → 語音 新增）。';
+}
+speechSynthesis.addEventListener('voiceschanged', pickVoice);
+function feed(text, emotion, gesture, speaking) {
+  call('/ai/speech', { seq: speakSeq, text, emotion, gesture, speaking }).catch(() => {});
+}
+function speak(r) {
+  const text = r.reply.replace(/[「」]/g, '').replace(/[~～]/g, '。');
+  speakSeq++;
+  if (ai.muted || !voice) { feed(r.reply, r.emotion, r.gesture, false); return Promise.resolve(); }
+  return new Promise(done => {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.voice = voice; u.lang = voice.lang; u.rate = 1.05; u.pitch = 1.25;
+    let started = false;
+    u.onstart = () => { started = true; speaking = true; feed(r.reply, r.emotion, r.gesture, true); };
+    const end = () => { speaking = false; feed(r.reply, r.emotion, r.gesture, false); done(); };
+    u.onend = end;
+    u.onerror = () => { if (!started) feed(r.reply, r.emotion, r.gesture, false); speaking = false; done(); };
+    speechSynthesis.speak(u);
+  });
+}
+let speaking = false;
+
+/* ---------- 畫面 ---------- */
+const log = $('log');
+function add(who, text, extra) {
+  const m = document.createElement('div'); m.className = 'msg ' + who;
+  const b = document.createElement('div'); b.className = 'b';
+  if (who === 'her') { const w = document.createElement('span'); w.className = 'who'; w.textContent = '小公主'; b.append(w); }
+  b.append(document.createTextNode(text));
+  if (extra) b.append(extra);
+  m.append(b); log.append(m); log.scrollTop = log.scrollHeight;
+  while (log.children.length > 80) log.firstElementChild.remove();
+  return b;
+}
+const SRC = { L1: '本機回答', L2: 'Edge 裝置模型', L3: '個人雲端' };
+function show(r) {
+  const extra = document.createDocumentFragment();
+  if (r.events?.length) {
+    const ul = document.createElement('ul'); ul.className = 'evs';
+    for (const e of r.events.slice(0, 12)) { const li = document.createElement('li'); li.textContent = `${e.date.slice(5).replace('-', '/')} ${e.time || ''} ${e.title}`; ul.append(li); }
+    extra.append(ul);
+  }
+  if (r.confirm) {
+    const card = document.createElement('div'); card.className = 'card';
+    const sum = document.createElement('div'); sum.className = 'sum'; sum.textContent = r.confirm.summary;
+    const row = document.createElement('div'); row.className = 'row';
+    const ok = document.createElement('button'); ok.className = 'btn sage'; ok.textContent = '確認';
+    const no = document.createElement('button'); no.className = 'btn cream'; no.textContent = '取消';
+    const id = r.confirm.requestId;
+    ok.onclick = () => { if (ai.pending?.requestId !== id) return expire(card); lock(card); run(() => ai.confirm(), '確認'); };
+    no.onclick = () => { if (ai.pending?.requestId !== id) return expire(card); lock(card); run(() => Promise.resolve(ai.cancel()), '取消'); };
+    row.append(ok, no); card.append(sum, row); extra.append(card);
+    activeCard = card;
+  }
+  if (r.choices?.length) {
+    const card = document.createElement('div'); card.className = 'card';
+    const row = document.createElement('div'); row.className = 'row';
+    for (const c of r.choices) { const b = document.createElement('button'); b.className = 'btn cream'; b.textContent = c.label; b.onclick = () => { lock(card); send(c.say); }; row.append(b); }
+    card.append(row); extra.append(card);
+  }
+  const src = document.createElement('span'); src.className = 'src'; src.textContent = SRC[r.source] || '本機回答'; extra.append(src);
+  add('her', r.reply, extra);
+  if (typeof r.muted === 'boolean') { ai.muted = r.muted; $('muteBtn').classList.toggle('on', r.muted); }
+  if (typeof r.dnd === 'boolean') { ai.dnd = r.dnd; $('dndBtn').classList.toggle('on', r.dnd); saveFlags(); }
+  return speak(r);
+}
+let activeCard = null;
+const lock = card => card.querySelectorAll('button').forEach(b => b.disabled = true);
+function expire(card) { lock(card); add('her', '這個確認已經失效了，行程沒有變動。'); }
+let busy = false;
+async function run(fn, echo) {
+  if (busy) return; busy = true;
+  if (activeCard && echo == null) lock(activeCard);
+  try { const r = await fn(); if (r) await show(r); }
+  catch (e) { add('her', '我剛剛出了點問題：' + (e.message || '未知錯誤')); }
+  finally { busy = false; $('text').focus(); }
+}
+function send(text) {
+  text = String(text || '').trim(); if (!text || busy) return;
+  add('me', text);
+  if (activeCard) { lock(activeCard); activeCard = null; }
+  run(() => ai.handle(text));
+}
+$('form').onsubmit = e => { e.preventDefault(); const t = $('text').value; $('text').value = ''; send(t); };
+$('muteBtn').onclick = () => { ai.muted = !ai.muted; $('muteBtn').classList.toggle('on', ai.muted); if (ai.muted) speechSynthesis.cancel(); saveFlags(); };
+$('dndBtn').onclick = () => { ai.dnd = !ai.dnd; $('dndBtn').classList.toggle('on', ai.dnd); saveFlags(); };
+$('clearBtn').onclick = () => { log.replaceChildren(); ai.cancel(); activeCard = null; };
+// 靜音、勿擾與問候時間只是本機偏好，不含對話內容
+function saveFlags() { try { localStorage.setItem('princess-chat-flags', JSON.stringify({ muted: ai.muted, dnd: ai.dnd })); } catch {} }
+try { const f = JSON.parse(localStorage.getItem('princess-chat-flags') || '{}'); ai.muted = !!f.muted; ai.dnd = !!f.dnd; } catch {}
+$('muteBtn').classList.toggle('on', ai.muted); $('dndBtn').classList.toggle('on', ai.dnd);
+
+/* ---------- 語音辨識：Vosk（WASM，在這個視窗裡執行），按住說話；錄音只在記憶體，不寫入磁碟 ---------- */
+const MODEL_URL = location.origin + '/ai/models/vosk-model-small-cn-0.22.tar.gz';
+const MAX_SEC = 30, IDLE_FREE_MS = 5 * 60e3;
+let model = null, modelLoading = null, idleTimer = 0;
+let rec = null;   // { stream, ctx, node, src, recognizer, timer, cancelled, text }
+function loadScript(src) { return new Promise((ok, bad) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = bad; document.head.append(s); }); }
+async function ensureModel() {
+  if (model) return model;
+  if (!modelLoading) modelLoading = (async () => {
+    $('live').textContent = '第一次使用，正在載入離線語音模型（約 5–15 秒）…';
+    if (!window.Vosk) await loadScript('/ai/lib/vosk.js');
+    const [m, cc] = await Promise.all([window.Vosk.createModel(MODEL_URL), import('/ai/lib/opencc-cn2t.js')]);
+    const conv = cc.Converter({ from: 'cn', to: 'twp' });
+    toTraditional = s => conv(s);
+    model = m; $('live').textContent = '';
+    return m;
+  })().catch(e => { modelLoading = null; throw e; });
+  return modelLoading;
+}
+// 閒置 5 分鐘就釋放語音模型的記憶體，下次按麥克風再載入
+function scheduleFree() {
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => { if (model && !rec) { model.terminate(); model = null; modelLoading = null; $('live').textContent = ''; } }, IDLE_FREE_MS);
+}
+const tidy = s => toTraditional(String(s || '').replace(/(?<=[㐀-鿿])\s+(?=[㐀-鿿])/g, '').trim());
+async function startRec() {
+  if (rec || busy) return;
+  speechSynthesis.cancel(); speaking = false;          // 說話前先停止播放，避免收到自己的聲音
+  const mic = $('mic');
+  mic.classList.add('busy'); mic.textContent = '準備中…';
+  let stream;
+  try {
+    const m = await ensureModel();
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    if (!holding) { stream.getTracks().forEach(t => t.stop()); resetMic(); return; }
+    const ctx = new AudioContext({ sampleRate: 16000 });
+    const recognizer = new m.KaldiRecognizer(16000);
+    const r = rec = { stream, ctx, recognizer, cancelled: false, text: '', partial: '' };
+    recognizer.on('partialresult', msg => { r.partial = msg.result.partial || ''; $('live').textContent = '聽到：' + tidy(r.partial); });
+    recognizer.on('result', msg => { const t = msg.result.text || ''; if (t) r.text += (r.text ? ' ' : '') + t; if (r.final) r.final(); });
+    r.src = ctx.createMediaStreamSource(stream);
+    r.node = ctx.createScriptProcessor(4096, 1, 1);
+    r.node.onaudioprocess = e => { if (!r.stopped) recognizer.acceptWaveformFloat(e.inputBuffer.getChannelData(0), ctx.sampleRate); };
+    r.src.connect(r.node); r.node.connect(ctx.destination);
+    r.timer = setTimeout(() => stopRec(false), MAX_SEC * 1000);
+    mic.classList.remove('busy'); mic.classList.add('rec'); mic.textContent = '● 放開送出';
+  } catch (e) {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    resetMic();
+    add('her', e && e.name === 'NotAllowedError' ? '我沒有使用麥克風的權限，可以改用打字跟我說話喔。' : '語音辨識沒有辦法啟動，可以改用打字跟我說話喔。');
+  }
+}
+function resetMic() { const mic = $('mic'); mic.classList.remove('rec', 'busy'); mic.textContent = '🎙 按住說話'; }
+async function stopRec(cancel) {
+  const r = rec; if (!r) return;
+  r.stopped = true; clearTimeout(r.timer);
+  try { r.src.disconnect(); r.node.disconnect(); } catch {}
+  r.stream.getTracks().forEach(t => t.stop());
+  const finished = new Promise(ok => { r.final = ok; setTimeout(ok, 1500); });
+  if (!cancel) r.recognizer.retrieveFinalResult();
+  if (!cancel) await finished;
+  try { r.recognizer.remove(); } catch {}
+  r.ctx.close();
+  rec = null; resetMic(); scheduleFree();
+  const text = tidy(r.text || r.partial);
+  $('live').textContent = cancel ? '已取消，沒有送出。' : '';
+  if (!cancel) { if (text) send(text); else $('live').textContent = '沒有聽清楚，可以再說一次或改用打字。'; }
+}
+let holding = false;
+const mic = $('mic');
+mic.addEventListener('pointerdown', e => { e.preventDefault(); mic.setPointerCapture(e.pointerId); holding = true; startRec(); });
+mic.addEventListener('pointerup', () => { holding = false; if (rec) stopRec(false); });
+mic.addEventListener('pointercancel', () => { holding = false; if (rec) stopRec(true); });
+// 鍵盤：空白鍵按住說話（焦點不在輸入框時），Esc 取消
+addEventListener('keydown', e => {
+  if (e.key === 'Escape') { holding = false; if (rec) stopRec(true); speechSynthesis.cancel(); }
+  if (e.code === 'Space' && document.activeElement !== $('text') && !e.repeat) { e.preventDefault(); holding = true; startRec(); }
+});
+addEventListener('keyup', e => { if (e.code === 'Space' && document.activeElement !== $('text')) { holding = false; if (rec) stopRec(false); } });
+addEventListener('pagehide', () => { if (rec) stopRec(true); speechSynthesis.cancel(); feed('', 'idle', '', false); if (model) model.terminate(); });
+
+/* ---------- 開啟時：主動問候（冷卻 15 分鐘、每小時最多 2 次、勿擾時不問候） ---------- */
+await refreshStatus();
+pickVoice();
+// L2 狀態只查詢、不建立工作階段（availability() 不會觸發模型下載）
+(async () => {
+  let s = 'Edge 未提供';
+  try { if (typeof LanguageModel !== 'undefined') s = await LanguageModel.availability({ expectedInputs: [{ type: 'text', languages: ['zh'] }] }); } catch (e) { s = '查詢失敗'; }
+  const label = { available: '可用', downloadable: '需要下載（不會自動下載）', downloading: '下載中', unavailable: '這台電腦不支援' }[s] || s;
+  $('l2Note').textContent = `Edge 裝置模型（選用）：${label}`;
+  document.documentElement.dataset.l2 = s;
+})();
+let greetOk = true;
+try {
+  const g = JSON.parse(localStorage.getItem('princess-chat-greet') || '[]').filter(t => Date.now() - t < 3600e3);
+  const cool = Math.max(15, status.settings?.greetCooldown ?? 15) * 60e3, per = status.settings?.greetPerHour ?? 2;
+  greetOk = !ai.dnd && g.length < per && !(g.length && Date.now() - g[g.length - 1] < cool);
+  if (greetOk) localStorage.setItem('princess-chat-greet', JSON.stringify([...g, Date.now()]));
+} catch {}
+const hello = greetOk ? ai.proactiveGreeting(0, 99) : null;
+if (hello) setTimeout(() => show(hello), 400);
+else add('her', '我在這裡喔，想聊什麼呢？');
+$('text').focus();
+</script>
+</body>
+</html>

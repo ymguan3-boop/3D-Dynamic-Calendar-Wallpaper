@@ -189,14 +189,14 @@ const RX = {
   confirmYes: /^(好|好的|好啊|好喔|好呀|對|對的|是|是的|確定|確認|沒錯|没错|可以|嗯|恩|要|ok|okay|yes|行|就這樣|就这样|麻煩了|拜託|拜托)(啊|喔|呀|的|呦|吧)?$/,
   confirmNo: /^(不要|不用|不對|不对|不是|取消|算了|錯了|错了|不行|no|先不要|等等|不了)(啊|喔|呀|吧)?$/,
   delete: /(刪除|删除|刪掉|删掉|移除|拿掉|去掉|不用.*了|取消(?!靜音|静音|勿擾|勿扰))/,
-  update: /(改到|改成|改為|改为|延到|延後|延后|提前到|提早到|挪到|換到|换到|調到|调到|調整|调整|更改|修改|改期|改時間|改时间)/,
+  update: /(改到|改成|改為|改为|延到|延後|延后|提前到|提早到|挪到|移到|換到|换到|調到|调到|調整|调整|更改|修改|改期|改時間|改时间)/,
   add: /(新增|加入|加個|加一個|加上|安排|排(?:個|一個)?|記下|记下|記錄|记录|記一下|记一下|幫我記|帮我记|提醒我|預約|预约|約了|约了|登記|登记|建立|建一個|寫下|写下)/,
   query: /(有什麼|有什么|有哪些|什麼行程|什么行程|行程(呢|嗎|吗)?$|查(?:一下|詢|询|看|查)|看看|有沒有|有没有|空嗎|空吗|有空|忙嗎|忙吗|安排了什麼|安排了什么|要做什麼|要做什么|幾點開始|几点开始|行事曆|行事历|行程表)/,
   // 明確的新增動詞（「有什麼安排」裡的「安排」不算）
   addVerb: /(新增|加入|加個|加一個|加上|記下|记下|記錄|记录|記一下|记一下|幫我記|帮我记|提醒我|預約|预约|登記|登记|建立|建一個|寫下|写下|幫我安排|帮我安排|安排一個|安排个)/,
   eventNoun: /(開會|开会|會議|会议|看醫生|看医生|回診|聚餐|吃飯|吃饭|上課|上课|面試|面试|出差|報告|报告|約會|约会|生日|旅行|旅遊|旅游|運動|运动|健身|考試|考试|看牙|剪頭髮|剪头发|拜訪|拜访|簡報|简报|研習|研习|訓練|训练|會勘|会勘|查核|稽核|審查|审查|截止|繳費|缴费|交件|值班|聚會|聚会|讀書會|读书会|演講|演讲|活動|活动)/,
   timeNow: /(現在|现在)?(幾點|几点|時間|时间)(了|呢)?$|現在幾點|现在几点|現在時間|现在时间/,
-  dateToday: /(今天|今日)(幾號|几号|星期幾|星期几|禮拜幾|礼拜几|日期|是幾月幾號|是几月几号)|幾月幾號|几月几号|今天是哪天/,
+  dateToday: /(今天|今日)(是)?(幾號|几号|星期幾|星期几|禮拜幾|礼拜几|週幾|周几|日期|幾月幾號|几月几号)|幾月幾號|几月几号|今天是哪天/,
   residents: /(居民|狐狸|綿羊|绵羊|羊|兔子|小蛇|蛇|小鳥|小鸟|鳥|鸟|蝴蝶|動物|动物|幾隻|几只|大家)/,
   planet: /(星球|火山|玫瑰|路燈|路灯|流星|樹苗|树苗|猴麵包樹|猴面包树|宇宙|星星)/,
   self: /(你是誰|妳是誰|你是谁|妳是谁|自我介紹|自我介绍|你叫什麼|妳叫什麼|你叫什么|你的名字|妳的名字|介紹一下你|介绍一下你)/,
@@ -219,8 +219,27 @@ export function extractTitle(s, parts) {
   let t = s;
   for (const p of parts) if (p) t = t.replace(p, ' ');
   t = t.replace(/(上午|下午|中午|晚上|早上|凌晨|傍晚|整天)/g, ' ').replace(FILLER, ' ').replace(/\s+/g, ' ').trim();
-  t = t.replace(/^(要|去|來|来|和|跟)\s*/, '').trim();
+  t = t.replace(/^(要|去|來|来|和|跟|把|將|将)\s*/, '').trim();
   return t.slice(0, 40);
+}
+
+// 找出「新的日期／時間」從哪裡開始：前面要留下非空的行程名稱，中間隔一到兩個字（動詞）
+function baSplit(s, now) {
+  for (let k = 3; k < s.length; k++) {
+    const tail = s.slice(k);
+    const nd = parseDate(tail, now), nt = parseTime(tail);
+    const startsWhen = (nd?.match && tail.startsWith(nd.match) && nd.date) || (nt?.match && tail.startsWith(nt.match) && nt.time);
+    if (!startsWhen) continue;
+    for (const verbLen of [2, 1]) {
+      const before = s.slice(1, k - verbLen), verb = s.slice(k - verbLen, k);
+      if (!before || /[0-9一二三四五六七八九十點点號号月日天週周]/.test(verb)) continue;
+      const od = parseDate(before, now);
+      const title = extractTitle(before, [od?.match, parseTime(before)?.match]);
+      if (!title) continue;
+      return { title, date: od?.date || null, newDate: nd?.date || null, newTime: nt?.time || null };
+    }
+  }
+  return null;
 }
 
 /* classify(text, { now, pending }) → { intent, date?, range?, time?, title?, issues:[], text } */
@@ -260,6 +279,16 @@ export function classify(rawText, ctx = {}) {
     out.title = extractTitle(before.replace(/^(把|將|将)/, ''), [od?.match, parseTime(before || '')?.match]);
     return out;
   }
+  // 「把〈行程〉〈動詞〉〈新時間〉」句型：語音辨識常把「改到／延到」聽成同音或近音字（改道、引導…），
+  // 所以不靠動詞本身，而是看句型：把＋行程名稱＋一兩個字＋新的日期或時間。
+  const baS = s.replace(/^(請你|请你|請|请|幫我|帮我|麻煩你|麻烦你|麻煩|麻烦|小公主)+/, '');
+  const baM = /^(把|將|将)/.test(baS) && !RX.addVerb.test(s) && !RX.delete.test(s) && !RX.query.test(s) ? baSplit(baS, now) : null;
+  if (baM) {
+    out.intent = 'calendar_update';
+    out.newDate = baM.newDate; out.newTime = baM.newTime;
+    out.date = baM.date; out.title = baM.title;
+    return out;
+  }
   if (RX.delete.test(s)) {
     out.intent = 'calendar_delete';
     out.title = extractTitle(s.replace(RX.delete, ' ').replace(/^(把|將|将)/, ''), [datePart, timePart]);
@@ -268,10 +297,16 @@ export function classify(rawText, ctx = {}) {
   const hasWhen = !!(out.date || out.time || d?.error || t?.error);
   const explicitAdd = RX.addVerb.test(s);
   if (!explicitAdd && RX.weather.test(s)) { out.intent = 'outside_info'; return out; }
+  // 「星球上有哪些動物」這類問居民／星球的句子沒有日期，不是查行程
+  if (!hasWhen && !/行程|行事曆|行事历|安排|會議|会议/.test(s) && (RX.residents.test(s) || RX.planet.test(s))) {
+    out.intent = RX.residents.test(s) ? 'residents' : 'planet'; return out;
+  }
   const isQuery = RX.query.test(s) && !explicitAdd;
   if (isQuery || (out.range && !explicitAdd)) { out.intent = 'calendar_query'; return out; }
   const question = /(嗎|吗|呢|如何|怎麼樣|怎么样|是不是|有沒有)$/.test(s);
-  const otherTopic = RX.planet.test(s) || RX.residents.test(s) || RX.timeNow.test(s) || RX.dateToday.test(s);
+  // 聊天話題（心情、稱讚、故事、道謝…）帶到「今天」也不是要新增行程
+  const otherTopic = RX.planet.test(s) || RX.residents.test(s) || RX.timeNow.test(s) || RX.dateToday.test(s) ||
+    RX.feeling.test(s) || RX.praise.test(s) || RX.joke.test(s) || RX.thanks.test(s) || RX.self.test(s) || RX.help.test(s);
   const loose = hasWhen && !question && !otherTopic && extractTitle(s, [datePart, timePart]).length >= 2;
   const whenOnly = out.date && out.time && !question && !extractTitle(s, [datePart, timePart]);   // 只說了日期時間：要新增，再補問標題
   if (explicitAdd || RX.add.test(s) || (hasWhen && RX.eventNoun.test(s) && !question) || loose || whenOnly) {

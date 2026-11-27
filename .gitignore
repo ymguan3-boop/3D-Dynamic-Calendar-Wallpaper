@@ -9,3 +9,9 @@ data.json
 *.log
 .DS_Store
 Thumbs.db
+# 離線語音模型（由 tools/fetch-ai-model.cjs 產生，不放進版本庫）與 AI Lite 安裝包
+**/ai/models/*.tar.gz
+**/download/小公主AI-Lite-安裝包.zip
+# T02 測試音檔（可由 tests/voice/make-audio.ps1 與 add-noise.cjs 重新產生）
+**/tests/voice/out*/
+**/tests/voice/16k*/

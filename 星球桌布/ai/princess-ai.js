@@ -98,7 +98,7 @@ export function createPrincessAI({ api, now = () => new Date(), random = Math.ra
     if (draft.issues?.includes('ambiguous_weekday')) {
       ask = { kind: 'weekday', draft };
       const [a, b] = draft.options;
-      return R(`是今天 ${a.slice(5).replace('-', '/')}，還是下週 ${b.slice(5).replace('-', '/')} 呢？`, 'wow', { choices: [a, b] });
+      return R(`是今天 ${a.slice(5).replace('-', '/')}，還是下週 ${b.slice(5).replace('-', '/')} 呢？`, 'wow', { choices: [{ label: `今天 ${a.slice(5).replace('-', '/')}`, say: '今天' }, { label: `下週 ${b.slice(5).replace('-', '/')}`, say: '下週' }] });
     }
     if (!draft.date) { ask = { kind: 'date', draft }; return R('要記在哪一天呢？', 'talk'); }
     if (!draft.title) { ask = { kind: 'title', draft }; return R(`${describeDate(draft.date)}${draft.time ? ' ' + describeTime(draft.time) : ''}要記下什麼事情呢？`, 'talk'); }
@@ -125,7 +125,7 @@ export function createPrincessAI({ api, now = () => new Date(), random = Math.ra
     if (!list.length) { clear(); return R('我找不到符合的行程耶，可以說得更清楚一點嗎？例如「刪除明天的聚餐」。', 'sad'); }
     if (list.length > 1) {
       ask = { kind: 'choose', op, p, choices: list.slice(0, 6) };
-      return R(`有 ${list.length} 個符合的行程：${list.slice(0, 6).map((e, i) => `${i + 1}. ${shortLine(e)}`).join('　')}。是第幾個呢？`, 'talk', { choices: list.slice(0, 6).map(e => e.id) });
+      return R(`有 ${list.length} 個符合的行程：${list.slice(0, 6).map((e, i) => `${i + 1}. ${shortLine(e)}`).join('　')}。是第幾個呢？`, 'talk', { choices: list.slice(0, 6).map((e, i) => ({ label: `${i + 1}. ${shortLine(e)}`, say: `第${i + 1}個` })) });
     }
     return changeTarget(list[0], p, op);
   }

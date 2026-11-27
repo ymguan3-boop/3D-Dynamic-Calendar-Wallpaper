@@ -1,0 +1,16 @@
+﻿{
+    "label":  "ai-lite-chat-open-no-voice-model",
+    "time":  "2026-11-27T14:13:27",
+    "seconds":  30,
+    "samples":  6,
+    "wallpaper_private_MB_avg":  882.8,
+    "wallpaper_private_MB_max":  884.4,
+    "wallpaper_processes":  9,
+    "manager_private_MB_avg":  338.5,
+    "manager_private_MB_max":  344.3,
+    "manager_processes":  9,
+    "host_private_MB_avg":  109.6,
+    "host_private_MB_max":  109.6,
+    "host_processes":  1,
+    "total_private_MB_avg":  1330.9
+}

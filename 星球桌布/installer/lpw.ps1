@@ -15,6 +15,7 @@ $LogFile      = Join-Path $App 'wallpaper-log.txt'
 $MainPrefix   = 'PlanetWallpaper|main'
 $MirrorPrefix = 'PlanetWallpaper|mirror|'
 $ControlTitle = '星球居民及行事曆管理'
+$ChatTitle    = '小公主對話'
 # Pages are served from this machine only (127.0.0.1). The page data (residents, calendar, settings) is also
 # written to data.json, because an organisation's Edge policy may clear browser storage when Edge closes.
 $Port         = 47826
@@ -24,7 +25,7 @@ function Log($m) {
   try { [IO.File]::AppendAllText($LogFile, ('{0:yyyy-MM-dd HH:mm:ss} {1}' -f (Get-Date), $m) + "`r`n") } catch {}
 }
 
-Add-Type -TypeDefinition @'
+$lpwSource = @'
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
@@ -332,6 +333,21 @@ public static class LPW {
   static readonly string managerSession = Guid.NewGuid().ToString("N");
   static string managerState = "{}";
   static DateTime managerUpdated;
+  // Used by PlanetAi: the wallpaper stays the only writer of the calendar, AI changes are queued as commands.
+  internal static string WallpaperState() { lock (managerLock) return managerState; }
+  internal static bool WallpaperAlive() { lock (managerLock) return DateTime.UtcNow - managerUpdated < TimeSpan.FromSeconds(4); }
+  internal static int EnqueueWallpaperCommand(string json) {
+    lock (managerLock) {
+      if (managerCommands.Count >= 128 || DateTime.UtcNow - managerUpdated >= TimeSpan.FromSeconds(4)) return 0;
+      managerCommands.Enqueue(new KeyValuePair<int, string>(++sentCommand, Convert.ToBase64String(Encoding.UTF8.GetBytes(json))));
+      return sentCommand;
+    }
+  }
+  static string StatusText(int code) {
+    switch (code) { case 200: return "OK"; case 400: return "Bad Request"; case 403: return "Forbidden"; case 404: return "Not Found";
+      case 405: return "Method Not Allowed"; case 409: return "Conflict"; case 429: return "Too Many Requests"; case 502: return "Bad Gateway";
+      case 503: return "Service Unavailable"; default: return "Error"; }
+  }
 
   static string ReadJsonBody(System.IO.Stream stream, byte[] buffer, int count, int headerEnd, string[] headers, int maxLength = 2000000) {
     int length = 0;
@@ -382,6 +398,16 @@ public static class LPW {
         byte[] body; string type = "text/html; charset=utf-8"; int code = 200;
         string dataFile = System.IO.Path.Combine(root, "data.json");
         string[] headers = head0.Split('\n');
+        // Security gate: Host (DNS rebinding), Origin / Sec-Fetch-Site (cross-site), session token (data and AI APIs).
+        string deny = PlanetAi.Gate(method, path, headers);
+        if (deny != null) {
+          PlanetAi.Log("gate.reject " + deny);
+          var rb = Encoding.ASCII.GetBytes("forbidden");
+          var rh = Encoding.ASCII.GetBytes("HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\nContent-Length: " + rb.Length + "\r\n" +
+            PlanetAi.SecurityHeaders(false) + "Cache-Control: no-store\r\nConnection: close\r\n\r\n");
+          s.Write(rh, 0, rh.Length); s.Write(rb, 0, rb.Length);
+          return;
+        }
         bool desktopRoute = path == "/desktop-pointer" || path == "/open-manager";
         bool bridgeRoute = path == "/wallpaper-state" || path == "/manager-state" || path == "/manager-command";
         bool desktopInput = (desktopRoute || path == "/wallpaper-state") && Array.Exists(headers,
@@ -430,16 +456,21 @@ public static class LPW {
           type = "application/json; charset=utf-8";
         }
         else if (path == "/data" && method == "POST") {
+          // stored encrypted with DPAPI (CurrentUser) in data.dat
           string json = ReadJsonBody(s, buf, n, headEnd, headers);
-          if (json != null) {
-              lock (root) { string tmp = dataFile + ".tmp"; System.IO.File.WriteAllText(tmp, json, new UTF8Encoding(false));
-                if (System.IO.File.Exists(dataFile)) System.IO.File.Replace(tmp, dataFile, null); else System.IO.File.Move(tmp, dataFile); }
-              body = Encoding.ASCII.GetBytes("saved"); type = "text/plain";
-          } else { body = Encoding.ASCII.GetBytes("bad data"); type = "text/plain"; code = 400; }
+          if (json != null && PlanetAi.WriteData(json)) { body = Encoding.ASCII.GetBytes("saved"); type = "text/plain"; }
+          else { body = Encoding.ASCII.GetBytes("bad data"); type = "text/plain"; code = 400; }
         }
         else if (path == "/data") {
-          string json; lock (root) { json = System.IO.File.Exists(dataFile) ? System.IO.File.ReadAllText(dataFile, Encoding.UTF8) : "{}"; }
-          body = Encoding.UTF8.GetBytes(json); type = "application/json; charset=utf-8";
+          body = Encoding.UTF8.GetBytes(PlanetAi.ReadData()); type = "application/json; charset=utf-8";
+        }
+        else if (path.StartsWith("/ai/", StringComparison.Ordinal)) {
+          bool feedOk = Array.Exists(headers, h => h.Trim().Equals("X-Desktop-Input: " + InputToken, StringComparison.OrdinalIgnoreCase));
+          AiResponse ar = PlanetAi.IsStatic(path) ? PlanetAi.Static(path)
+            : path == "/ai/feed" && !(method == "GET" && feedOk) ? AiResponse.Json(403, "{\"error\":\"desktop_only\"}")
+            : PlanetAi.Handle(method, path, headers, max => ReadJsonBody(s, buf, n, headEnd, headers, max), System.IO.Path.Combine(root, "wallpaper-log.txt"));
+          if (ar == null) { body = Encoding.ASCII.GetBytes("not found"); type = "text/plain"; code = 404; }
+          else { body = ar.Body; type = ar.Type; code = ar.Code; }
         }
         else if (path == "/desktop-pointer" && method == "GET" && desktopInput) {
           string prefix = "/desktop-pointer?window=";
@@ -454,11 +485,15 @@ public static class LPW {
           body = Encoding.ASCII.GetBytes("ok"); type = "text/plain";
         }
         else if (path == "/ping") { body = Encoding.ASCII.GetBytes("ok"); type = "text/plain"; }
-        else if (path == "/index.html" || path == "/control.html") body = System.IO.File.ReadAllBytes(System.IO.Path.Combine(root, path.Substring(1)));
+        else if (path == "/index.html" || path == "/control.html" || path == "/princess-chat.html")
+          body = PlanetAi.InjectSession(System.IO.File.ReadAllBytes(System.IO.Path.Combine(root, path.Substring(1))));
         else { body = Encoding.ASCII.GetBytes("not found"); type = "text/plain"; code = 404; }
-        string cors = desktopRoute || bridgeRoute ? "" : "Access-Control-Allow-Origin: *\r\n";
-        string head = "HTTP/1.1 " + code + (code == 200 ? " OK" : code == 400 ? " Bad Request" : " Not Found") + "\r\nContent-Type: " + type +
-          "\r\nContent-Length: " + body.Length + "\r\nCache-Control: no-store\r\n" + cors + "Connection: close\r\n\r\n";
+        // No Access-Control-Allow-Origin, so other origins cannot read any response. The one exception is /ping
+        // (body "ok"): the file:// start page uses it to see whether the wallpaper service is running.
+        string extra = PlanetAi.SecurityHeaders(type.StartsWith("text/html", StringComparison.Ordinal));
+        if (path == "/ping") extra += "Access-Control-Allow-Origin: *\r\n";
+        string head = "HTTP/1.1 " + code + " " + StatusText(code) + "\r\nContent-Type: " + type +
+          "\r\nContent-Length: " + body.Length + "\r\nCache-Control: no-store\r\n" + extra + "Connection: close\r\n\r\n";
         var hb = Encoding.ASCII.GetBytes(head);
         s.Write(hb, 0, hb.Length); s.Write(body, 0, body.Length);
       }
@@ -466,6 +501,12 @@ public static class LPW {
   }
 }
 '@
+# PlanetAi.cs (AI service + security gateway) is compiled together with the host; all using directives go first.
+$aiSource = Get-Content (Join-Path $App 'PlanetAi.cs') -Raw -Encoding UTF8
+$lines = ($lpwSource + "`n" + $aiSource) -split "`r?`n"
+$usings = @($lines | Where-Object { $_ -match '^using [A-Za-z0-9_.]+;\s*$' } | ForEach-Object { $_.Trim() } | Sort-Object -Unique)
+$code = @($lines | Where-Object { $_ -notmatch '^using [A-Za-z0-9_.]+;\s*$' })
+Add-Type -TypeDefinition (($usings + $code) -join "`n") -ReferencedAssemblies System.Security, System.Web.Extensions
 
 [void][LPW]::SetProcessDPIAware()
 
@@ -639,6 +680,33 @@ function Open-Manager {
   }
 }
 
+# ---------- princess chat window (hotkey / manager / desktop button) ----------
+function Open-Chat {
+  $windows = [LPW]::FindEdge($ChatTitle, $false)
+  if ($windows.Count) {
+    if ([LPW]::IsIconic($windows[0])) { [void][LPW]::ShowWindow($windows[0], 9) }
+    [void][LPW]::SetForegroundWindow($windows[0])
+  } else {
+    Start-Edge ($BaseUrl + 'princess-chat.html') $ManagerProfileDir
+  }
+}
+
+# Organisation policy (HKLM first, then HKCU). Front-end settings can never override these values.
+function Get-AiPolicy {
+  $p = @{ LockOfficialMode = $false; AllowDeviceAI = $false; AllowCloudAI = $false; CloudGatewayUrl = '' }
+  $seen = @{}
+  foreach ($root in @('HKLM:\SOFTWARE\Policies\PlanetWallpaper', 'HKCU:\SOFTWARE\Policies\PlanetWallpaper')) {
+    try {
+      $k = Get-ItemProperty -Path $root -ErrorAction Stop
+      foreach ($n in @('LockOfficialMode', 'AllowDeviceAI', 'AllowCloudAI')) {
+        if ($null -ne $k.$n -and -not $seen[$n]) { $p[$n] = ([int]$k.$n -ne 0); $seen[$n] = $true }
+      }
+      if ($k.CloudGatewayUrl -and -not $seen['url']) { $p.CloudGatewayUrl = [string]$k.CloudGatewayUrl; $seen['url'] = $true }
+    } catch {}
+  }
+  return $p
+}
+
 # ---------- main + mirror wallpaper windows ----------
 $script:State = @{}
 function Open-Main {
@@ -730,10 +798,19 @@ switch ($Action) {
   'control' {
     Open-Manager
   }
+  'chat' {
+    # 從開始功能表開啟：先確認桌布服務在執行，再轉到對話頁
+    $windows = [LPW]::FindEdge($ChatTitle, $false)
+    if ($windows.Count) { [void][LPW]::ShowWindow($windows[0], 9); [void][LPW]::SetForegroundWindow($windows[0]) }
+    else { Start-Edge (([Uri](Join-Path $App 'open-control.html')).AbsoluteUri + '#chat') $ManagerProfileDir }
+  }
   default {
     if (-not (Get-EdgePath)) { Log 'Microsoft Edge not found'; exit 1 }
     Stop-Watcher
     Set-Content -Path $PidFile -Value $PID
+    $pol = Get-AiPolicy
+    [PlanetAi]::Configure($App, $pol.LockOfficialMode, $pol.AllowDeviceAI, $pol.AllowCloudAI, $pol.CloudGatewayUrl)
+    if ([PlanetAi]::Enabled) { [Hotkey]::Start() }
     $ok = $false
     for ($i = 0; $i -lt 10 -and -not $ok; $i++) { $ok = [LPW]::StartServer($App, $Port); if (-not $ok) { Start-Sleep -Milliseconds 500 } }
     if (-not $ok) { Log "port $Port is in use, cannot serve the wallpaper pages"; exit 1 }
@@ -745,6 +822,7 @@ switch ($Action) {
     while ($true) {
       Start-Sleep -Seconds 1
       if ([LPW]::TakeManagerRequest()) { Open-Manager }
+      if ([PlanetAi]::TakeChatRequest()) { Open-Chat }
       Restore-Placement
       if ((++$tick % 3) -ne 0) { continue }
       $S = $script:S

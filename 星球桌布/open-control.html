@@ -32,8 +32,9 @@
   const BASE = 'http://127.0.0.1:47826/';
   let tries = 0;
   function attempt() {
+    // /ping 是服務唯一允許跨來源讀取的位址（內容只有 ok）；Edge 會擋 no-cors 的本機請求，所以用一般 cors
     fetch(BASE + 'ping', { cache: 'no-store' })
-      .then(r => { if (!r.ok) throw new Error(); location.replace(BASE + 'control.html'); })
+      .then(r => { if (!r.ok) throw new Error(); location.replace(BASE + (location.hash === '#chat' ? 'princess-chat.html' : 'control.html')); })
       .catch(() => {
         if (++tries < 6) { setTimeout(attempt, 1000); return; }
         document.getElementById('h').textContent = '星球桌布目前沒有執行';

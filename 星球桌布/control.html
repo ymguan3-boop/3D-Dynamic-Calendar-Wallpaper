@@ -120,6 +120,13 @@
   .toast.show{opacity:1}
   .credit{position:fixed;right:10px;bottom:8px;z-index:5;font-size:11.5px;letter-spacing:.18em;color:var(--wood-d);
     font-family:var(--serif);padding:3px 10px;border-radius:999px;background:rgba(251,246,234,.92);border:1px dashed var(--stitch);pointer-events:none}
+  .ai-row{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12.5px;color:var(--ink-dim);font-family:var(--serif);letter-spacing:.05em}
+  .ai-row label{display:flex;align-items:center;gap:6px;flex:1}
+  .ai-row input[type=checkbox]{accent-color:var(--sage-d);width:16px;height:16px}
+  .ai-row input[type=text]{width:130px;flex:none}
+  .opt:disabled{opacity:.45;cursor:not-allowed;background:var(--cream)}
+  .badge{font-size:10.5px;padding:2px 8px;border-radius:999px;background:var(--sage);color:#fbfff4;letter-spacing:.08em;white-space:nowrap}
+  .badge.off{background:#b9a48a}
 </style>
 </head>
 <body>
@@ -128,6 +135,28 @@
     <div class="tagline">THE LITTLE PLANET · EST. 2026</div>
   </div>
   <div class="status"><span class="dot" id="dot"></span><span id="st">尋找桌布中…</span></div>
+
+  <section class="card" id="aiCard">
+    <div class="ttl">和小公主說話 <small id="aiMode">公務模式・完全離線</small></div>
+    <div class="row" style="margin-top:0">
+      <button class="btn red" id="aiOpen">開啟對話視窗</button>
+    </div>
+    <div class="note">也可以按快速鍵 <b id="aiHotkeyShow">Ctrl+Alt+P</b> 開啟。文字與語音都在這台電腦上處理，不連網路；新增、修改或刪除行程前一定會先請你確認。</div>
+    <div class="seg" style="margin-top:12px">
+      <button class="opt" data-mode="official">公務模式<small>本機規則</small></button>
+      <button class="opt" data-mode="device" disabled>裝置 AI<small id="devNote">未開放</small></button>
+      <button class="opt" data-mode="personal" disabled>個人雲端<small id="cloudNote">雲端未啟用</small></button>
+    </div>
+    <div class="ai-row"><label><input type="checkbox" id="aiSub">桌布顯示小公主的字幕</label></div>
+    <div class="ai-row"><label><input type="checkbox" id="aiMask">桌面隱藏行程名稱（只顯示「行程」）</label></div>
+    <div class="ai-row"><label>開啟對話的快速鍵</label><input type="text" id="aiHotkey" maxlength="40" placeholder="Ctrl+Alt+P"><span class="badge" id="aiHotkeyState">已啟用</span></div>
+    <div class="ai-row"><label>主動問候間隔（分鐘，至少 15）</label><input type="text" id="aiCool" maxlength="3" style="width:60px"></div>
+    <div class="row">
+      <button class="btn cream" id="aiSave">儲存對話設定</button>
+      <button class="btn kraft" id="aiLog">清除對話紀錄檔</button>
+    </div>
+    <div class="note">紀錄檔只記狀態、時間與錯誤代碼，不含對話內容，保留 14 天。</div>
+  </section>
 
   <section class="card green">
     <div class="ttl" data-art="planet">桌布顯示螢幕</div>
@@ -209,7 +238,9 @@
         CAL_KEY = 'planet-wallpaper-calendar', DISPLAY_KEY = 'planet-wallpaper-display';
   const $ = id => document.getElementById(id);
   const HAS_SERVER = location.protocol === 'http:' && location.hostname === '127.0.0.1' && location.port === '47826';
-  const managerHeaders = { 'X-Planet-Manager': '1' };
+  // 本機服務送出頁面時填入的工作階段金鑰（其他網站拿不到）
+  const PLANET_SESSION = '__PLANET_SESSION__';
+  const managerHeaders = { 'X-Planet-Manager': '1', 'X-Planet-Session': PLANET_SESSION };
   const pending = new Map();
   let managerState = {}, managerAlive = false, managerSession, commandRequest = Promise.resolve();
   const raw = k => HAS_SERVER ? pending.get(k)?.value ?? managerState[k] : localStorage.getItem(k);
@@ -393,6 +424,48 @@
     setTimeout(refreshManager, 650);
   }
   if (HAS_SERVER) refreshManager();
+
+  /* ---------- 小公主對話設定 ---------- */
+  const aiHeaders = { 'X-Planet-Session': PLANET_SESSION, 'Content-Type': 'application/json' };
+  const aiPost = (path, body) => fetch(path, { method: 'POST', headers: aiHeaders, body: JSON.stringify(body || {}) });
+  const MODE_TEXT = { official: '公務模式・完全離線', device: '裝置 AI・Edge 內建模型', personal: '個人雲端・已同意' };
+  async function loadAi() {
+    if (!HAS_SERVER) { $('aiCard').hidden = true; return; }
+    try {
+      const st = await (await fetch('/ai/status', { headers: aiHeaders, cache: 'no-store' })).json();
+      if (!st.enabled) { $('aiCard').hidden = true; return; }
+      $('aiMode').textContent = MODE_TEXT[st.mode] || MODE_TEXT.official + (st.locked ? '（政策鎖定）' : '');
+      if (st.locked) $('aiMode').textContent = '公務模式・已由組織政策鎖定';
+      document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === st.mode));
+      const dev = document.querySelector('[data-mode=device]'), cloud = document.querySelector('[data-mode=personal]');
+      dev.disabled = !st.deviceAllowed; $('devNote').textContent = st.deviceAllowed ? '需本機模型已就緒' : '未開放';
+      cloud.disabled = !(st.cloudAllowed && st.cloudConfigured); $('cloudNote').textContent = cloud.disabled ? '雲端未啟用' : '需同意後使用';
+      const set = st.settings || {};
+      $('aiSub').checked = set.subtitles !== false; $('aiMask').checked = !!set.maskTitles;
+      $('aiHotkey').value = set.hotkey || 'Ctrl+Alt+P'; $('aiHotkeyShow').textContent = set.hotkey || 'Ctrl+Alt+P';
+      $('aiCool').value = set.greetCooldown ?? 15;
+      $('aiHotkeyState').textContent = st.hotkeyActive ? '已啟用' : '被占用'; $('aiHotkeyState').classList.toggle('off', !st.hotkeyActive);
+    } catch (e) { $('aiMode').textContent = '桌布沒有執行'; }
+  }
+  $('aiOpen').onclick = async () => { try { const r = await aiPost('/ai/open-chat'); toast(r.ok ? '正在開啟對話視窗…' : '無法開啟'); } catch (e) { toast('桌布沒有執行'); } };
+  $('aiSave').onclick = async () => {
+    const cool = Math.max(15, Math.min(240, parseInt($('aiCool').value, 10) || 15));
+    const r = await aiPost('/ai/settings', { subtitles: $('aiSub').checked, maskTitles: $('aiMask').checked, hotkey: $('aiHotkey').value.trim() || 'Ctrl+Alt+P', greetCooldown: cool });
+    toast(r.ok ? '對話設定已儲存' : '快速鍵格式不正確，例如 Ctrl+Alt+P');
+    setTimeout(loadAi, 1500);
+  };
+  $('aiLog').onclick = async () => { const r = await aiPost('/ai/log/clear'); toast(r.ok ? '紀錄檔已清除' : '無法清除'); };
+  document.querySelectorAll('[data-mode]').forEach(b => b.onclick = async () => {
+    const mode = b.dataset.mode;
+    let consent = false;
+    if (mode === 'personal') consent = confirm('個人雲端模式會把「你問的那一句話」送到你部署的雲端閘道，不會送出行事曆或其他資料。
+公務電腦請勿使用。確定要開啟嗎？');
+    if (mode === 'personal' && !consent) return;
+    const r = await aiPost('/ai/mode', { mode, consent });
+    toast(r.ok ? '已切換' : '這個模式目前不能使用');
+    loadAi();
+  });
+  loadAi();
   else addEventListener('storage', e => { if (e.key === CAL_KEY) render(); if (e.key === DISPLAY_KEY) showDisp(); });
 </script>
 </body>

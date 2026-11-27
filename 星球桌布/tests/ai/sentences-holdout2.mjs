@@ -1,0 +1,23 @@
+// T02 第二組保留測試集：在依第一組保留集修正解析器「之後、重新測試之前」寫下，沒有用來調整任何規則。
+export const HOLDOUT2 = [
+  ['把禮拜三的讀書會改到禮拜四晚上', 'calendar_update'],
+  ['請把下週的出差延到十二月十五號', 'calendar_update'],
+  ['把明天早上的運動改到下午五點', 'calendar_update'],
+  ['下週四早上九點半開晨會', 'calendar_add'],
+  ['幫我記十二月二十號同學會', 'calendar_add'],
+  ['後天中午跟客戶吃飯', 'calendar_add'],
+  ['禮拜六下午三點帶小孩看電影', 'calendar_add'],
+  ['提醒我明天帶雨傘', 'calendar_add'],
+  ['後天有什麼事', 'calendar_query'],
+  ['這週還有什麼行程', 'calendar_query'],
+  ['明天下午忙嗎', 'calendar_query'],
+  ['把禮拜五的聚餐刪掉', 'calendar_delete'],
+  ['取消十二月三號的拜訪', 'calendar_delete'],
+  ['現在是幾點', 'time_now'],
+  ['今天禮拜幾', 'date_today'],
+  ['介紹一下你自己', 'self_intro'],
+  ['星球上有哪些動物', 'residents'],
+  ['玫瑰還好嗎', 'planet'],
+  ['我今天好累', 'feeling'],
+  ['掰掰', 'bye'],
+];
