@@ -28,7 +28,7 @@ public static class PlanetAi {
   static string KeyFile { get { return Path.Combine(root, "groq-key.dat"); } }
   static bool HasKey { get { return File.Exists(KeyFile); } }
   static int voiceRequested;
-  static DateTime lastChatPoll;
+  static DateTime lastChatPoll, lastChatRequest;
   // The regular wallpaper package has no chat page: the AI routes then stay off (only /ai/status answers).
   public static bool Enabled = false;
   static Dictionary<string, object> settings = new Dictionary<string, object>();
@@ -205,7 +205,7 @@ public static class PlanetAi {
   static string speech = "{\"seq\":0}";
   static int chatRequested;
   public static bool TakeChatRequest() { return System.Threading.Interlocked.Exchange(ref chatRequested, 0) == 1; }
-  public static void RequestChat() { System.Threading.Interlocked.Exchange(ref voiceRequested, 1); System.Threading.Interlocked.Exchange(ref chatRequested, 1); }
+  public static void RequestChat() { lock (sync) lastChatRequest = DateTime.UtcNow; System.Threading.Interlocked.Exchange(ref voiceRequested, 1); System.Threading.Interlocked.Exchange(ref chatRequested, 1); }
 
   // ---------- calendar proposals ----------
   sealed class Proposal { public string RequestId, Op, EventJson, Id; public int Rev; public DateTime Expires; }
@@ -339,7 +339,7 @@ public static class PlanetAi {
     if (Array.IndexOf(PostRoutes, path) < 0 && path != "/ai/feed") return AiResponse.Json(404, Err(404, "not_found"));
     if (method != "POST" && path != "/ai/feed") return AiResponse.Json(405, Err(405, "method"));
     if (path == "/ai/feed") {
-      lock (sync) return AiResponse.Json(200, "{\"onPhone\":" + ((DateTime.UtcNow - lastChatPoll).TotalSeconds < 4 ? "true" : "false") + ",\"speech\":" + speech + ",\"subtitles\":" + (Bool("subtitles") ? "true" : "false") + ",\"maskTitles\":" + (Bool("maskTitles") ? "true" : "false") + "}");
+      lock (sync) return AiResponse.Json(200, "{\"onPhone\":" + (((DateTime.UtcNow - lastChatPoll).TotalSeconds < 4 || (DateTime.UtcNow - lastChatRequest).TotalSeconds < 5) ? "true" : "false") + ",\"speech\":" + speech + ",\"subtitles\":" + (Bool("subtitles") ? "true" : "false") + ",\"maskTitles\":" + (Bool("maskTitles") ? "true" : "false") + "}");
     }
     var body = Parse(readBody(16384));
     if (body == null) return AiResponse.Json(400, Err(400, "bad_json"));

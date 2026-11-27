@@ -162,6 +162,8 @@ public static class LPW {
   static readonly object inputLock = new object();
   static readonly Dictionary<string, IntPtr> inputWindows = new Dictionary<string, IntPtr>();
   static readonly Dictionary<string, ButtonPosition> managerButtons = new Dictionary<string, ButtonPosition>();
+  static readonly Dictionary<string, ButtonPosition> princessButtons = new Dictionary<string, ButtonPosition>();
+  const string PrincessSuffix = ":princess";
   static readonly Dictionary<string, IntPtr> cursorTargets = new Dictionary<string, IntPtr>();
   const string ManagerButtonClass = "PlanetWallpaperManagerButton";
   // Hold the delegate for the lifetime of the native window class.
@@ -178,12 +180,12 @@ public static class LPW {
 
   public static void SetInputWindow(string key, IntPtr window) {
     lock (inputLock) {
-      if (window == IntPtr.Zero) { inputWindows.Remove(key); managerButtons.Remove(key); }
+      if (window == IntPtr.Zero) { inputWindows.Remove(key); managerButtons.Remove(key); princessButtons.Remove(key); }
       else inputWindows[key] = window;
     }
   }
   public static void ClearInputWindows() {
-    lock (inputLock) { inputWindows.Clear(); managerButtons.Clear(); }
+    lock (inputLock) { inputWindows.Clear(); managerButtons.Clear(); princessButtons.Clear(); }
   }
   static bool IsDesktopWindow(IntPtr hit) {
     IntPtr top = GetAncestor(hit, 2);
@@ -196,7 +198,14 @@ public static class LPW {
     if (message == 0x21) return new IntPtr(3); // WM_MOUSEACTIVATE: receive the click without activating the child
     if (message == 0x201) { pressedManagerButton = h; return IntPtr.Zero; } // WM_LBUTTONDOWN
     if (message == 0x202) {
-      if (pressedManagerButton == h) System.Threading.Interlocked.Exchange(ref managerRequested, 1);
+      if (pressedManagerButton == h) {
+        bool princess = false;
+        foreach (var entry in cursorTargets) {
+          if (entry.Value == h) { princess = entry.Key.EndsWith(PrincessSuffix, StringComparison.Ordinal); break; }
+        }
+        if (princess && PlanetAi.Enabled) PlanetAi.RequestChat();
+        else if (!princess) System.Threading.Interlocked.Exchange(ref managerRequested, 1);
+      }
       pressedManagerButton = IntPtr.Zero;
       return IntPtr.Zero;
     }
@@ -213,15 +222,10 @@ public static class LPW {
     var buttons = new Dictionary<string, RECT>();
     lock (inputLock) {
       foreach (var entry in inputWindows) {
-        ButtonPosition button; RECT window;
-        if (!managerButtons.TryGetValue(entry.Key, out button) || DateTime.UtcNow - button.Updated > TimeSpan.FromSeconds(1) ||
-            !IsWindowVisible(entry.Value) || !GetWindowRect(entry.Value, out window)) continue;
-        RECT b = button.BasisPoints;
-        int width = window.Right - window.Left, height = window.Bottom - window.Top;
-        buttons[entry.Key] = new RECT {
-          Left = window.Left + width * b.Left / 10000, Top = window.Top + height * b.Top / 10000,
-          Right = window.Left + width * b.Right / 10000, Bottom = window.Top + height * b.Bottom / 10000
-        };
+        RECT window;
+        if (!IsWindowVisible(entry.Value) || !GetWindowRect(entry.Value, out window)) continue;
+        AddTargetBounds(buttons, managerButtons, entry.Key, "", window);
+        AddTargetBounds(buttons, princessButtons, entry.Key, PrincessSuffix, window);
       }
     }
     if (!IsWindow(desktopView)) desktopView = DesktopIconView();
@@ -252,18 +256,30 @@ public static class LPW {
         SetWindowPos(target, IntPtr.Zero, corner.X, corner.Y, bounds.Right - bounds.Left, bounds.Bottom - bounds.Top, 0x50);
     }
   }
-  static void RememberManagerButton(string key, string header) {
+  static void AddTargetBounds(Dictionary<string, RECT> targets, Dictionary<string, ButtonPosition> source, string key, string suffix, RECT window) {
+    ButtonPosition button;
+    if (!source.TryGetValue(key, out button) || DateTime.UtcNow - button.Updated > TimeSpan.FromSeconds(1)) return;
+    RECT b = button.BasisPoints;
+    int width = window.Right - window.Left, height = window.Bottom - window.Top;
+    targets[key + suffix] = new RECT {
+      Left = window.Left + width * b.Left / 10000, Top = window.Top + height * b.Top / 10000,
+      Right = window.Left + width * b.Right / 10000, Bottom = window.Top + height * b.Bottom / 10000
+    };
+  }
+  static void RememberButton(Dictionary<string, ButtonPosition> targets, string key, string header) {
+    if (header == null) { targets.Remove(key); return; }
     string[] values = header.Split(',');
     var points = new int[4];
     if (values.Length != points.Length) return;
     for (int i = 0; i < points.Length; i++)
       if (!Int32.TryParse(values[i], out points[i]) || points[i] < 0 || points[i] > 10000) return;
     if (points[0] >= points[2] || points[1] >= points[3]) return;
-    managerButtons[key] = new ButtonPosition {
+    targets[key] = new ButtonPosition {
       BasisPoints = new RECT { Left = points[0], Top = points[1], Right = points[2], Bottom = points[3] },
       Updated = DateTime.UtcNow
     };
   }
+  [DllImport("user32.dll")] static extern IntPtr SetCursor(IntPtr cursor);
   static void ObserveDesktopPointer() {
     IntPtr instance = GetModuleHandle(null), desktopView = IntPtr.Zero;
     WindowClass cursorClass = ManagerButtonWindowClass(instance);
@@ -280,6 +296,7 @@ public static class LPW {
       POINT point;
       IntPtr hit = GetCursorPos(out point) ? WindowFromPoint(point) : IntPtr.Zero;
       bool overManagerButton = cursorTargets.ContainsValue(hit);
+      if (overManagerButton && cursorClass.Cursor != IntPtr.Zero) SetCursor(cursorClass.Cursor);
       bool onDesktop = overManagerButton || IsDesktopWindow(hit);
       if (pressedManagerButton != hit) pressedManagerButton = IntPtr.Zero;
       if (down && !wasDown) pressedAt = onDesktop && !overManagerButton ? (POINT?)point : null;
@@ -312,13 +329,14 @@ public static class LPW {
       (p.Value.X - r.Left) / (double)(r.Right - r.Left),
       (p.Value.Y - r.Top) / (double)(r.Bottom - r.Top));
   }
-  static string DesktopPointer(string key, string button) {
+  static string DesktopPointer(string key, string button, string princess) {
     lock (inputLock) {
       IntPtr window;
       RECT rect = new RECT();
       if (inputWindows.TryGetValue(key, out window)) {
         GetWindowRect(window, out rect);
-        if (button != null) RememberManagerButton(key, button);
+        if (button != null) RememberButton(managerButtons, key, button);
+        RememberButton(princessButtons, key, PlanetAi.Enabled ? princess : null);
       }
       return "{\"point\":" + PointerPosition(cursor, rect) + ",\"click\":" + PointerPosition(lastClick, rect) +
         ",\"serial\":" + clickSerial + "}";
@@ -477,7 +495,10 @@ public static class LPW {
           string key = parts[1].StartsWith(prefix, StringComparison.Ordinal) ? Uri.UnescapeDataString(parts[1].Substring(prefix.Length)) : "";
           const string buttonHeader = "X-Manager-Button:";
           string button = Array.Find(headers, h => h.StartsWith(buttonHeader, StringComparison.OrdinalIgnoreCase));
-          body = Encoding.UTF8.GetBytes(DesktopPointer(key, button == null ? null : button.Substring(buttonHeader.Length).Trim()));
+          const string princessHeader = "X-Princess-Button:";
+          string princess = Array.Find(headers, h => h.StartsWith(princessHeader, StringComparison.OrdinalIgnoreCase));
+          body = Encoding.UTF8.GetBytes(DesktopPointer(key, button == null ? null : button.Substring(buttonHeader.Length).Trim(),
+            princess == null ? null : princess.Substring(princessHeader.Length).Trim()));
           type = "application/json; charset=utf-8";
         }
         else if (path == "/open-manager" && method == "POST" && desktopInput) {

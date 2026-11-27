@@ -555,22 +555,70 @@ function shadowAll(o) { o.traverse(m => { if (m.isMesh) { m.castShadow = true; }
 /* 障礙物（居民會繞開） */
 const OBST = [];
 
-// 小公主的圓石小屋
+// 小公主住在離北極玫瑰園較遠的坡面。
 {
-  const cottage = new THREE.Group(), dir = dirFrom(65, 48);
-  const wall = M(0xffdeb0), wood = M(0x87563b), roof = M(0xa44e43), glow = M(0xffda82);
-  cottage.add(mesh(new THREE.CylinderGeometry(.32,.35,.46,16),wall,0,.21,0));
-  cottage.add(mesh(new THREE.ConeGeometry(.45,.42,16),roof,0,.64,0));
-  cottage.add(mesh(new THREE.BoxGeometry(.095,.28,.09),wood,.2,.67,0));
-  cottage.add(mesh(new THREE.BoxGeometry(.14,.26,.05),wood,0,.13,.32));
-  cottage.add(sph(.015,glow,.045,.13,.353));
-  for (const side of [-1,1]) {
-    const window = mesh(new THREE.BoxGeometry(.1,.12,.025),glow,side*.21,.26,.25);
-    window.rotation.y=side*.68; cottage.add(window);
-    cottage.add(sph(.07,M(0x84945b),side*.26,.06,.21));
+  const cottage = new THREE.Group(), dir = dirFrom(22, -49);
+  const plaster = M(0xffe7bd), oak = M(0x85503a), sage = M(0x658c73);
+  const glass = M(0xffc76b, { emissive: 0xf3a441, emissiveIntensity: .42 });
+  const tiles = [0xb75653, 0xd17b67, 0xa7484a].map(color => M(color));
+  function facade(profile, depth, material, y, z, x = 0) {
+    return mesh(new THREE.ExtrudeGeometry(profile, {
+      depth, bevelEnabled: true, bevelSegments: 2, steps: 1, bevelSize: .014, bevelThickness: .014
+    }), material, x, y, z);
   }
-  placeOn(cottage,dir,.35,-.02); shadowAll(cottage); planet.add(cottage);
-  OBST.push({dir,r:.46});
+  const wall = new THREE.Shape();
+  wall.moveTo(-.31,0); wall.lineTo(.31,0); wall.lineTo(.31,.36);
+  wall.quadraticCurveTo(.17,.52,0,.62); wall.quadraticCurveTo(-.17,.52,-.31,.36); wall.closePath();
+  cottage.add(facade(wall,.46,plaster,0,-.23));
+  const roof = new THREE.Shape();
+  roof.moveTo(-.43,.33); roof.quadraticCurveTo(-.25,.42,-.06,.67);
+  roof.quadraticCurveTo(.01,.76,.1,.68); roof.quadraticCurveTo(.25,.43,.43,.33);
+  roof.quadraticCurveTo(.3,.31,.09,.57); roof.quadraticCurveTo(.01,.67,-.05,.58);
+  roof.quadraticCurveTo(-.27,.34,-.43,.33);
+  cottage.add(facade(roof,.65,tiles[0],0,-.325));
+  const shingle = new THREE.SphereGeometry(1, 10, 6);
+  for (const side of [-1,1]) {
+    for (const [row,[x,y,angle]] of [[.11,.662,-.76],[.22,.534,-.87],[.34,.404,-.61]].entries()) {
+      for (let i=0;i<7;i++) {
+        const tile = mesh(shingle, tiles[(i+row)%3], side*x,y,-.28+i*.093);
+        tile.scale.set(.081,.019,.058);
+        tile.rotation.z = side*angle;
+        cottage.add(tile);
+      }
+    }
+  }
+  const chimney = mesh(new THREE.BoxGeometry(.11,.25,.11),oak,.21,.60,-.12);
+  chimney.rotation.z = -.09;
+  cottage.add(chimney, mesh(new THREE.BoxGeometry(.145,.043,.144),plaster,.217,.733,-.12));
+  const door = new THREE.Shape();
+  door.moveTo(-.085,0); door.lineTo(.085,0); door.lineTo(.085,.17);
+  door.quadraticCurveTo(.085,.245,0,.245); door.quadraticCurveTo(-.085,.245,-.085,.17); door.closePath();
+  cottage.add(facade(door,.025,oak,0,.228),facade(door,.023,sage,.015,.252));
+  cottage.add(sph(.013,M(0xe8b76a),.053,.102,.293));
+  for (const side of [-1,1]) {
+    const x = side*.202;
+    const ring = mesh(new THREE.TorusGeometry(.063,.012,8,20),oak,x,.24,.252);
+    cottage.add(ring, mesh(new THREE.CircleGeometry(.059,20),glass,x,.24,.25),
+      mesh(new THREE.BoxGeometry(.105,.011,.019),oak,x,.24,.261),
+      mesh(new THREE.BoxGeometry(.011,.105,.019),oak,x,.24,.261),
+      mesh(new THREE.BoxGeometry(.16,.033,.075),sage,x,.151,.271));
+    for (let i=0;i<3;i++) {
+      const flower = sph(.016,tiles[i],x+(i-1)*.041,.187,.299);
+      flower.scale.y=1.2;
+      cottage.add(flower);
+    }
+  }
+  cottage.add(mesh(new THREE.CircleGeometry(.039,16),glass,0,.431,.247),
+    mesh(new THREE.TorusGeometry(.042,.011,8,20),oak,0,.431,.25));
+  for (const [x,z] of [[0,.34],[.025,.422],[-.019,.51]]) {
+    const stone = sph(.068,M(0xcdba99),x,.012,z);
+    stone.scale.set(1,.27,.65); cottage.add(stone);
+  }
+  cottage.name = 'princess-cottage';
+  placeOn(cottage,dir,.24,-.025);
+  shadowAll(cottage);
+  planet.add(cottage);
+  OBST.push({dir,r:.51});
 }
 
 /* ---------- 火山 ---------- */
@@ -1287,14 +1335,14 @@ function updPrince(dt, t) {
   planet.updateMatrixWorld();
   _camL.copy(camera.position); planet.worldToLocal(_camL);
   let target = Math.atan2(_camL.x, _camL.z) - .25;
-  const f = prince.focus;
+  const f = prince.onPhone ? null : prince.focus;
   const birdOnHead = creatures.some(b => b.kind === 'bird' && b.mode === 'ground' && b.land && b.land.perch === 'prince');
   if (f === 'rose') target = Math.atan2(ROSE_DIR.x, ROSE_DIR.z);
   else if (f && arc(f.dir, UP) > .05) target = Math.atan2(f.dir.x, f.dir.z);
   else {
     let near = null, nd = 1.3;
     for (const c of creatures) { if (c.kind === 'bird' && c.mode === 'ground' && c.land && c.land.perch === 'prince') continue; const d = arc(c.dir, UP); if (d < nd && d > .05 && c.alt < 1) { nd = d; near = c; } }
-    if (near) target = Math.atan2(near.dir.x, near.dir.z);
+    if (near && !prince.onPhone) target = Math.atan2(near.dir.x, near.dir.z);
   }
   prince.yaw = angLerp(prince.yaw, target, 1 - Math.exp(-dt * 2.2));
   prince.g.rotation.y = prince.yaw;
@@ -1422,15 +1470,49 @@ addEventListener('pointermove', e => {
 
 /* 點擊居民 / 小公主 */
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
-function hitPlanet(x, y) {
+const ground = planet.getObjectByName('ground');
+const projection = new THREE.Vector3();
+function pointRay(x, y) {
   ndc.set(x * 2 - 1, 1 - y * 2);
   ray.setFromCamera(ndc, camera);
-  const hit = ray.intersectObject(planet, true).find(h => h.object.isMesh);
+}
+function visibleMesh(hit) {
+  if (!hit.object.isMesh) return false;
+  for (let object = hit.object; object; object = object.parent) if (!object.visible) return false;
+  return true;
+}
+function hitsPrincess(x, y) {
+  if (!prince.model) return false;
+  pointRay(x, y);
+  const hit = ray.intersectObject(prince.model.root, true).find(visibleMesh);
+  if (!hit) return false;
+  const surface = ray.intersectObject(ground, false)[0];
+  return !surface || hit.distance < surface.distance;
+}
+function princessButtonAt(point) {
+  if (calTargetAt(point) !== renderer.domElement || !hitsPrincess(point[0], point[1])) return null;
+  let left = 1, top = 1, right = 0, bottom = 0;
+  for (const x of [-.23,.23]) for (const y of [0,.86]) for (const z of [-.27,.27]) {
+    projection.set(x, y, z).applyMatrix4(prince.g.matrixWorld).project(camera);
+    const screenX = (projection.x + 1) / 2, screenY = (1 - projection.y) / 2;
+    left = Math.min(left, screenX); top = Math.min(top, screenY);
+    right = Math.max(right, screenX); bottom = Math.max(bottom, screenY);
+  }
+  return [left,top,right,bottom].map(value => Math.round(clamp(value,0,1) * 10000)).join(',');
+}
+function hitPlanet(x, y) {
+  if (hitsPrincess(x, y)) {
+    if (desktopToken) fetch('/ai/open-chat', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json','X-Planet-Session':PLANET_SESSION },
+      body: '{}'
+    }).catch(() => {});
+    else princeReact(pick(['😊', '👋', '🌹', '⭐']));
+    return;
+  }
+  pointRay(x, y);
+  const hit = ray.intersectObject(planet, true).find(visibleMesh);
   if (!hit) return;
-  let o = hit.object;
-  while (o && o !== planet) { if (o === prince.g) {
-    if (desktopToken) fetch('/ai/open-chat', {method:'POST', headers:{'Content-Type':'application/json','X-Planet-Session':PLANET_SESSION}, body:'{}'}).catch(() => {});
-    princeReact(pick(['😊', '👋', '🌹', '⭐'])); return; } o = o.parent; }
   const cid = hit.object.userData.cid;
   const c = cid && creatures.find(x => x.id === cid);
   if (!c) return;
@@ -1438,6 +1520,10 @@ function hitPlanet(x, y) {
   else if (c.kind === 'fly') { c.swirl = 2; bubble(c.g, '✨', c.bh, .2); }
   else { releaseTarget(c); c.mode = 'play'; c.timer = 1.6; bubble(c.g, c.type === 'snake' ? '…' : '💕', c.bh); }
 }
+renderer.domElement.addEventListener('pointermove', e => {
+  if (!desktopToken) renderer.domElement.style.cursor =
+    hitsPrincess(e.clientX / innerWidth, e.clientY / innerHeight) ? 'pointer' : '';
+});
 renderer.domElement.addEventListener("pointerdown", e => { if (!desktopToken && e.button === 0) hitPlanet(e.clientX / innerWidth, e.clientY / innerHeight); });
 
 /* Lively Wallpaper 自訂屬性 */
@@ -1728,7 +1814,7 @@ function calTargetAt(point) {
 if (desktopToken) {
   const pointerUrl = '/desktop-pointer?window=' + encodeURIComponent(MIRROR || 'main');
   const managerButton = document.getElementById('toggle');
-  let lastClick;
+  let lastClick, pointer = null;
   async function pollDesktopPointer() {
     try {
       const headers = { 'X-Desktop-Input': desktopToken };
@@ -1738,9 +1824,14 @@ if (desktopToken) {
         headers['X-Manager-Button'] = [bounds.left / innerWidth, bounds.top / innerHeight,
           bounds.right / innerWidth, bounds.bottom / innerHeight].map(basisPoints).join(',');
       }
+      if (pointer) {
+        const princessButton = princessButtonAt(pointer);
+        if (princessButton) headers['X-Princess-Button'] = princessButton;
+      }
       const response = await fetch(pointerUrl, { headers });
       if (!response.ok) throw new Error('Desktop input unavailable');
       const { point, click, serial } = await response.json();
+      pointer = point;
       hoverCalTrigger(calTargetAt(point)?.closest('.cal-trigger') || null);
       if (lastClick !== undefined && serial !== lastClick && click) {
         const target = calTargetAt(click);

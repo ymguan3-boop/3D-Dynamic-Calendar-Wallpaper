@@ -247,6 +247,27 @@ export function createPrincess(THREE, gltfScene) {
     oval(ponytail, tie, [side*.033,.073,-.092], [.035,.018,.015]).rotation.z = side*.5;
   }
 
+  const braids = new THREE.Group();
+  J.head.add(braids);
+  const braidTails = [];
+  for (const side of [-1,1]) {
+    const braid = new THREE.Group();
+    braid.position.set(side*.098,.088,-.067);
+    braid.rotation.z = side*.22;
+    braids.add(braid);
+    braidTails.push(braid);
+    for (let segment=0;segment<7;segment++) {
+      const width = .034 - segment*.0028;
+      const weave = segment%2 === 0 ? -1 : 1;
+      for (const strand of [-1,1]) {
+        const lock = oval(braid, hair, [strand*width*.43,-segment*.027,weave*strand*.009], [width*.75,.027,width*.68]);
+        lock.rotation.z = strand*.54;
+      }
+    }
+    oval(braid, tie, [0,-.186,0], [.02,.011,.02]);
+    oval(braid, hair, [side*.007,-.206,.003], [.018,.03,.017]).rotation.z = side*.25;
+  }
+
   const swimwear = new THREE.Group();
   J.hips.add(swimwear);
   const originalBodiceMaterial = J.bodice.material;
@@ -287,7 +308,8 @@ export function createPrincess(THREE, gltfScene) {
     J.bodice.material = isSwim ? swimFabric : originalBodiceMaterial;
     J.skirt.visible = J.sash.visible = J.bow.visible = !isSwim;
     for (const [,object] of dressDetails) object.visible = !isSwim;
-    J.hairBack.visible = !isGarden;
+    J.hairBack.visible = !isGarden && !isSwim;
+    braids.visible = isSwim;
     ponytail.visible = isGarden;
     swimwear.visible = isSwim;
   }
@@ -408,16 +430,16 @@ export function createPrincess(THREE, gltfScene) {
     J.chest.rotation.x = ease(J.chest.rotation.x, p === 'pet' ? .3 : p === 'water' ? .14 : 0, k);
     J.chest.rotation.y = ease(J.chest.rotation.y, p === 'water' ? -.25 : 0, k);
     // ---- 頭
-    const hx = p === 'stars' ? -.5 : state.birdOnHead ? -.35 : p === 'pet' ? .22 : p === 'reach' ? -.3 : 0;
+    const hx = p === 'phone' ? -.08 : p === 'stars' ? -.5 : state.birdOnHead ? -.35 : p === 'pet' ? .22 : p === 'reach' ? -.3 : 0;
     J.head.rotation.x = ease(J.head.rotation.x, hx, k);
-    J.head.rotation.z = Math.sin(t * .7) * .07 + (p === 'wave' ? .12 : 0) + (p === 'sit' ? .16 : 0);
+    J.head.rotation.z = Math.sin(t * .7) * .07 + (p === 'wave' ? .12 : 0) + (p === 'sit' ? .16 : 0) + (p === 'phone' ? -.12 : 0);
     // ---- 手臂（L 在角色左手邊 = +x）
     // 平常：手臂微微外張、手肘往前彎，手停在蓬裙外側（直直垂下會被裙子吃掉手指）
     const L = { uz: .34, ux: -.1, fz: .06, fx: -.6 }, R = { uz: -.34, ux: -.1, fz: -.06, fx: -.6 };
     phone.visible = p === 'phone';
     if (phone.visible) {
       R.uz=-.86; R.ux=-.62; R.fx=-2.24; R.fz=.42;
-      phone.position.copy(pinchPoint()); phone.rotation.z=.22;
+      phone.rotation.z = .22;
     }
     if (p === 'wave') { L.uz = 2.45 + Math.sin(t * 11) * .3; L.ux = -.2; L.fz = .45 + Math.sin(t * 11 + 1) * .35; L.fx = 0; }
     if (p === 'reach') { L.uz = 2.75; L.ux = -.35; L.fz = .1; R.uz = -.6; R.ux = -.4; }
@@ -440,6 +462,7 @@ export function createPrincess(THREE, gltfScene) {
     const gL = { wave: 'open', reach: 'open', cheer: 'fist' }[p] || 'relax';
     const gR = { phone:'pinch', pet: 'open', reach: 'open', water: 'pinch', thumb: 'thumb', cheer: 'fist' }[p] || 'relax';
     applyHand('L', HAND[gL], hk); applyHand('R', HAND[gR], hk);
+    if (phone.visible) phone.position.copy(pinchPoint());
     // 澆水器：把手頂端放在捏住的點，壺嘴朝角色正前方，澆水時一前一後地傾斜
     can.visible = p === 'water';
     if (can.visible) {
@@ -454,6 +477,9 @@ export function createPrincess(THREE, gltfScene) {
     J.hairBack.rotation.z = Math.sin(t * 1.2 + .5) * .05;
     ponytail.rotation.x = Math.sin(t * 1.6) * .1;
     ponytail.rotation.z = Math.sin(t * 1.2 + .5) * .065;
+    if (braids.visible) braidTails.forEach((braid,i) => {
+      braid.rotation.x = Math.sin(t * 1.7 + i) * .09;
+    });
     for (const side of ['L', 'R']) for (let i = 1; i <= 4; i++) {
       const r = J[`ribbon_${side}_${i}`];
       if (!r) continue;
