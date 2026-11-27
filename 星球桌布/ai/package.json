@@ -1,0 +1,6 @@
+{
+  "name": "planet-wallpaper-ai",
+  "private": true,
+  "type": "module",
+  "description": "小公主 AI Lite 的瀏覽器端模組（ES module），測試時由 Node 直接載入"
+}
