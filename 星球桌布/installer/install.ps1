@@ -64,14 +64,6 @@ public static class Program {
     $l.IconLocation = $icon
     $l.Save()
   }
-  # 管理視窗的捷徑直接開 Edge（從捷徑經由腳本再開 Edge 視窗會被 Edge 忽略）
-  $controlUrl = ([Uri](Join-Path $Dest 'open-control.html')).AbsoluteUri
-  $edgeArgs = "--user-data-dir=`"$Dest\edge-profile`" --app=`"$controlUrl`" --window-size=440,880 " +
-    '--no-first-run --no-default-browser-check --hide-crash-restore-bubble --disable-session-crashed-bubble ' +
-    '--disable-extensions --disable-sync --disable-translate --disable-backgrounding-occluded-windows ' +
-    '--disable-renderer-backgrounding --disable-background-timer-throttling ' +
-    '--disable-features=CalculateNativeWinOcclusion,Translate,msEdgeStartupBoost'
-
   $managerIcon = (Join-Path $icons 'manager.ico') + ',0'
   $startIcon = (Join-Path $icons 'start.ico') + ',0'
   $stopIcon = (Join-Path $icons 'stop.ico') + ',0'
@@ -82,9 +74,9 @@ public static class Program {
   New-Item -ItemType Directory -Force $menu | Out-Null
   New-Shortcut (Join-Path $menu '啟動星球桌布.lnk') $launcher 'start' '把小公主的星球設為桌布' $startIcon
   New-Shortcut (Join-Path $menu '停止星球桌布.lnk') $launcher 'stop' '停止動態桌布，回到原本的桌布' $stopIcon
-  New-Shortcut (Join-Path $menu "$ManagerName.lnk") $edge $edgeArgs '新增居民、管理行事曆、選擇顯示螢幕' $managerIcon
+  New-Shortcut (Join-Path $menu "$ManagerName.lnk") $launcher 'control' '新增居民、管理行事曆、選擇顯示螢幕' $managerIcon
   New-Shortcut (Join-Path $menu '解除安裝星球桌布.lnk') $launcher 'uninstall' '移除星球桌布' $removeIcon
-  New-Shortcut (Join-Path $desktop "$ManagerName.lnk") $edge $edgeArgs '新增居民、管理行事曆、選擇顯示螢幕' $managerIcon
+  New-Shortcut (Join-Path $desktop "$ManagerName.lnk") $launcher 'control' '新增居民、管理行事曆、選擇顯示螢幕' $managerIcon
   New-Shortcut (Join-Path ([Environment]::GetFolderPath('Startup')) '星球桌布.lnk') $launcher 'start' '開機時自動啟動星球桌布' $startIcon
 
   Start-Process $launcher -ArgumentList 'start'

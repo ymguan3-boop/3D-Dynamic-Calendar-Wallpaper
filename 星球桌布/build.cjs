@@ -22,6 +22,7 @@ const parts = {
   '/*GLTF_SRC*/': safe('GLTFLoader', read('vendor/GLTFLoader.js')),
   '/*RIG_SRC*/': safe('princess-rig', read('princess-rig.js')),
   '/*GLB_B64*/': fs.readFileSync(path.join(root, 'models', 'princess.glb')).toString('base64'),
+  '/*EXPRESSION_B64*/': fs.readFileSync(path.join(assets, 'expressions.png')).toString('base64'),
 };
 let html = read('index.html');
 for (const [k, v] of Object.entries(parts)) {

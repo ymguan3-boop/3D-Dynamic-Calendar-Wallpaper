@@ -58,7 +58,7 @@ public static class LPW {
   [DllImport("user32.dll")] static extern bool GetLayeredWindowAttributes(IntPtr h, out uint key, out byte a, out uint f);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern bool SystemParametersInfo(uint a, uint b, string c, uint d);
   [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
-  [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern uint GetDpiForSystem();
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
   [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT p);
@@ -111,13 +111,14 @@ public static class LPW {
     uint k, f; byte a;
     return (ex & 0x80000) != 0 && GetLayeredWindowAttributes(h, out k, out a, out f) && a == 255;
   }
-  // monitors as {left, top, right, bottom, isPrimary}
+  // Each entry contains the screen bounds, its primary flag, and its work area bounds.
   public static List<int[]> Monitors() {
     var list = new List<int[]>();
     EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, delegate(IntPtr m, IntPtr dc, ref RECT r, IntPtr d) {
       var mi = new MONITORINFO(); mi.cbSize = Marshal.SizeOf(typeof(MONITORINFO));
-      GetMonitorInfo(m, ref mi);
-      list.Add(new int[] { mi.rcMonitor.Left, mi.rcMonitor.Top, mi.rcMonitor.Right, mi.rcMonitor.Bottom, (mi.dwFlags & 1) != 0 ? 1 : 0 });
+      if (!GetMonitorInfo(m, ref mi)) return true;
+      list.Add(new int[] { mi.rcMonitor.Left, mi.rcMonitor.Top, mi.rcMonitor.Right, mi.rcMonitor.Bottom, (mi.dwFlags & 1) != 0 ? 1 : 0,
+        mi.rcWork.Left, mi.rcWork.Top, mi.rcWork.Right, mi.rcWork.Bottom });
       return true;
     }, IntPtr.Zero);
     return list;
@@ -294,18 +295,17 @@ function Get-EdgePath {
   return $null
 }
 
-function Start-Edge([string]$page, [string]$query, [string[]]$extra) {
-  $url = $BaseUrl + $page + $query
+function Start-Edge([string]$url) {
   $edgeArgs = @(
     "--user-data-dir=`"$ProfileDir`"", "--app=`"$url`"",
     '--no-first-run', '--no-default-browser-check', '--hide-crash-restore-bubble', '--disable-session-crashed-bubble',
     '--disable-extensions', '--disable-sync', '--disable-translate',
     '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--disable-background-timer-throttling',
     '--disable-features=CalculateNativeWinOcclusion,Translate,msEdgeStartupBoost'
-  ) + $extra
+  ) + (Get-ManagerWindowArgs)
   try {
     $p = Start-Process -FilePath (Get-EdgePath) -ArgumentList $edgeArgs -PassThru -ErrorAction Stop
-    Log "edge launched pid=$($p.Id) page=$page"
+    Log "edge launched pid=$($p.Id)"
   } catch { Log "edge launch failed: $($_.Exception.Message)" }
 }
 
@@ -340,9 +340,27 @@ function Wait-Edge([string]$text, [bool]$exact, [int]$seconds) {
 # ---------- monitors ----------
 function Get-Monitors {
   $list = foreach ($m in [LPW]::Monitors()) {
-    [pscustomobject]@{ L = $m[0]; T = $m[1]; R = $m[2]; B = $m[3]; W = $m[2] - $m[0]; H = $m[3] - $m[1]; Primary = ($m[4] -eq 1); Key = "$($m[0])_$($m[1])_$($m[2])_$($m[3])" }
+    [pscustomobject]@{
+      L = $m[0]; T = $m[1]; R = $m[2]; B = $m[3]; W = $m[2] - $m[0]; H = $m[3] - $m[1]
+      Primary = ($m[4] -eq 1); Key = "$($m[0])_$($m[1])_$($m[2])_$($m[3])"
+      WorkL = $m[5]; WorkT = $m[6]; WorkW = $m[7] - $m[5]; WorkH = $m[8] - $m[6]
+    }
   }
   return @($list | Sort-Object @{ e = { -not $_.Primary } }, L, T)
+}
+function Get-ManagerWindowArgs {
+  # Every window in this Edge process inherits the original startup bounds.
+  $mon = @(Get-Monitors)[0]
+  if (-not $mon) { return '--window-size=440,880' }
+  $scale = [Math]::Max(1, [LPW]::GetDpiForSystem()) / 96.0
+  $workW = [int][Math]::Floor($mon.WorkW / $scale)
+  $workH = [int][Math]::Floor($mon.WorkH / $scale)
+  $w = [Math]::Min(440, [Math]::Max(1, $workW - 32))
+  $h = [Math]::Min(880, [Math]::Max(1, $workH - 32))
+  $x = [int][Math]::Floor($mon.WorkL / $scale + ($workW - $w) / 2)
+  $y = [int][Math]::Floor($mon.WorkT / $scale + ($workH - $h) / 2)
+  "--window-size=$w,$h"
+  "--window-position=$x,$y"
 }
 function Get-Targets([string]$mode) {
   $mons = Get-Monitors
@@ -385,7 +403,21 @@ function Set-Placement($h, $d, $mon) {
   }
 }
 
+function Set-WallpaperFullScreen($h) {
+  $caption = 0x00C00000
+  if (([LPW]::GetWindowLongPtr($h, -16).ToInt64() -band $caption) -eq 0) { return }
+  # F11 applies to just this wallpaper window. The shared Edge process stays windowed.
+  [void][LPW]::PostMessage($h, 0x100, [IntPtr]0x7A, [IntPtr]0x00570001)
+  [void][LPW]::PostMessage($h, 0x101, [IntPtr]0x7A, [IntPtr]0xC0570001)
+  for ($i = 0; $i -lt 60; $i++) {
+    if (([LPW]::GetWindowLongPtr($h, -16).ToInt64() -band $caption) -eq 0) { return }
+    Start-Sleep -Milliseconds 25
+  }
+  Log "full screen request timed out: $([LPW]::Title($h))"
+}
+
 function Connect-Window($h, $d, $mon) {
+  if ([LPW]::GetParent($h) -eq [IntPtr]::Zero) { Set-WallpaperFullScreen $h }
   $st = [LPW]::GetWindowLongPtr($h, -16).ToInt64() -band 0xFFFFFFFFL
   $remove = 0x00C00000L -bor 0x00040000L -bor 0x00080000L -bor 0x00020000L -bor 0x00010000L -bor 0x80000000L
   $st = ($st -band (-bnot $remove)) -bor 0x40000000L -bor 0x10000000L    # WS_CHILD | WS_VISIBLE, no frame
@@ -421,47 +453,23 @@ function Stop-Watcher {
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 }
 
-# ---------- control window: Edge opens new windows full screen (inherited from the wallpaper) ----------
-$script:Fixed = @{}
+# ---------- control window ----------
 function Open-Manager {
   $windows = [LPW]::FindEdge($ControlTitle, $true)
   if ($windows.Count) {
     if ([LPW]::IsIconic($windows[0])) { [void][LPW]::ShowWindow($windows[0], 9) }
     [void][LPW]::SetForegroundWindow($windows[0])
   } else {
-    Start-Edge 'control.html' '' @('--window-size=440,880')
-  }
-}
-function Repair-ControlWindows {
-  foreach ($h in [LPW]::FindEdge($ControlTitle, $true)) {
-    $k = $h.ToInt64()
-    if ($script:Fixed.ContainsKey($k)) { continue }
-    $script:Fixed[$k] = $true
-    # Edge may reopen the window minimized if it was minimized last time; bring it back first
-    if ([LPW]::IsIconic($h)) { [void][LPW]::ShowWindow($h, 9); Start-Sleep -Milliseconds 500; Log 'control window restored from minimized' }
-    $r = New-Object LPW+RECT; [void][LPW]::GetWindowRect($h, [ref]$r)
-    $cx = ($r.Left + $r.Right) / 2; $cy = ($r.Top + $r.Bottom) / 2
-    $mon = @(Get-Monitors | Where-Object { $cx -ge $_.L -and $cx -lt $_.R -and $cy -ge $_.T -and $cy -lt $_.B })[0]
-    if (-not $mon) { $mon = (Get-Monitors)[0] }
-    if (($r.Right - $r.Left) -ge $mon.W -and ($r.Bottom - $r.Top) -ge $mon.H - 2) {
-      [void][LPW]::PostMessage($h, 0x100, [IntPtr]0x7A, [IntPtr]0x00570001)   # F11 = leave full screen
-      [void][LPW]::PostMessage($h, 0x101, [IntPtr]0x7A, [IntPtr]0xC0570001)
-      Start-Sleep -Milliseconds 900
-      $scale = [LPW]::GetDpiForWindow($h) / 96.0; if ($scale -le 0) { $scale = 1 }
-      $w = [int](440 * $scale); $hh = [Math]::Min([int](880 * $scale), $mon.H - [int](70 * $scale))
-      [void][LPW]::SetWindowPos($h, [IntPtr]::Zero, [int]($mon.L + ($mon.W - $w) / 2), [int]($mon.T + ($mon.H - $hh) / 2), $w, $hh, 0x4 -bor 0x40)
-      Log 'control window resized'
-    }
+    Start-Edge ([Uri](Join-Path $App 'open-control.html')).AbsoluteUri
   }
 }
 
 # ---------- main + mirror wallpaper windows ----------
 $script:State = @{}
 function Open-Main {
-  # Edge applies --start-fullscreen only when it starts fresh, so our other Edge windows are closed first
+  # Restart the dedicated Edge process so its initial bounds apply to the manager as well.
   Stop-OurEdge
-  Start-Sleep -Milliseconds 800
-  Start-Edge 'index.html' "?wallpaper&desktopInput=$([LPW]::InputToken)" @('--start-fullscreen')
+  Start-Edge ($BaseUrl + "index.html?wallpaper&desktopInput=$([LPW]::InputToken)")
   return (Wait-Edge $MainPrefix $false 30)
 }
 function Get-Mode($h) {
@@ -494,7 +502,7 @@ function Sync-Windows {
     $title = $MirrorPrefix + $k
     $h = @([LPW]::FindEdge($title, $true))[0]
     if (-not $h) {
-      Start-Edge 'index.html' "?wallpaper&mirror=$k&desktopInput=$([LPW]::InputToken)" @()
+      Start-Edge ($BaseUrl + "index.html?wallpaper&mirror=$k&desktopInput=$([LPW]::InputToken)")
       $h = Wait-Edge $title $true 20
     }
     if ($h -and $h -ne [IntPtr]::Zero) {
@@ -564,7 +572,6 @@ switch ($Action) {
     while ($true) {
       Start-Sleep -Seconds 1
       if ([LPW]::TakeManagerRequest()) { Open-Manager }
-      Repair-ControlWindows
       Restore-Placement
       if ((++$tick % 3) -ne 0) { continue }
       $S = $script:S
