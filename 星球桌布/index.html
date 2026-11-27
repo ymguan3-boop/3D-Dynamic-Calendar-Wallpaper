@@ -1,0 +1,1658 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>星球桌布</title>
+<style>
+  :root{
+    --ui-bg: rgba(14,16,38,.62);
+    --ui-line: rgba(255,240,200,.18);
+    --ui-text: #f6eedb;
+    --ui-dim: #b9b3c9;
+    --ui-accent: #f5cf47;
+  }
+  html,body{margin:0;height:100%;overflow:hidden;background:#04050d;color:var(--ui-text);
+    font-family:"Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif}
+  canvas{display:block}
+  #ui{position:fixed;right:28px;bottom:72px;display:flex;flex-direction:column;align-items:flex-end;gap:10px;
+    transition:opacity .6s ease;user-select:none;z-index:5}
+  #ui.dim{opacity:.16}
+  #ui:hover{opacity:1}
+  #ui button{font:inherit;color:inherit;cursor:pointer;border:1px solid var(--ui-line);background:var(--ui-bg);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-radius:999px;transition:background .2s,border-color .2s,transform .1s}
+  #ui button:hover{background:rgba(40,42,80,.8);border-color:rgba(245,207,71,.5)}
+  #ui button:active{transform:scale(.96)}
+  #toggle{padding:8px 16px;font-size:14px;letter-spacing:.06em}
+  #toggle b{display:inline-block;min-width:20px;margin-left:6px;padding:1px 7px;border-radius:999px;background:rgba(245,207,71,.18);color:var(--ui-accent);font-weight:600}
+  #panel{width:290px;padding:16px;border-radius:18px;background:var(--ui-bg);border:1px solid var(--ui-line);
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 10px 40px rgba(0,0,0,.35)}
+  #panel[hidden]{display:none}
+  .ttl{font-size:13px;color:var(--ui-dim);letter-spacing:.12em;margin:0 0 10px 2px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .grid button{border-radius:14px!important;padding:10px 4px 8px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:22px}
+  .grid button span{font-size:12px;color:var(--ui-dim)}
+  .row{display:flex;gap:6px;margin-top:12px}
+  .row button{flex:1;padding:7px 4px;font-size:12px}
+  .slider{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:12px;color:var(--ui-dim)}
+  .slider input{flex:1;accent-color:var(--ui-accent)}
+  .hint{margin-top:12px;font-size:11px;color:var(--ui-dim);line-height:1.5;opacity:.8}
+  /* 操作面板：鄉村美式風格（亞麻、木頭、格紋、縫線） */
+  #ui button{color:#3e2c20;background:#fffaf0;border:1.5px solid #dcc8a6;backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:0 2px 0 #dcc8a6}
+  #ui button:hover{background:#fff1d6;border-color:#c9a87c}
+  #ui button:active{transform:translateY(2px);box-shadow:none}
+  #toggle{color:#fdf3df!important;font-family:"Noto Serif TC","PMingLiU",Georgia,serif;letter-spacing:.14em!important;border-color:rgba(0,0,0,.15)!important;
+    background:repeating-linear-gradient(91deg,rgba(0,0,0,.07) 0 2px,transparent 2px 11px),linear-gradient(180deg,#a7744f,#8a5a3b)!important;box-shadow:0 2px 0 #5b3a24!important}
+  #toggle b{background:#fffaf0;color:#a8432f}
+  #panel{position:relative;color:#3e2c20;padding-top:22px;border:1px solid #dcc8a6;backdrop-filter:none;-webkit-backdrop-filter:none;
+    background:repeating-linear-gradient(0deg,rgba(120,88,58,.045) 0 1px,transparent 1px 4px),#fbf6ea;
+    outline:1.5px dashed #bfa27b;outline-offset:-7px;box-shadow:0 2px 0 #d9c6a2,0 10px 30px rgba(0,0,0,.35)}
+  #panel::before{content:"";position:absolute;left:0;right:0;top:0;height:11px;border-radius:18px 18px 0 0;
+    background:repeating-linear-gradient(0deg,rgba(168,67,47,.42) 0 5.5px,transparent 5.5px 11px),repeating-linear-gradient(90deg,rgba(168,67,47,.42) 0 5.5px,transparent 5.5px 11px),#fff}
+  #panel .ttl{color:#863322;font-family:"Noto Serif TC","PMingLiU",Georgia,serif;font-weight:700}
+  #panel .grid button{border-radius:10px!important}
+  #panel .grid button span,#panel .slider,#panel .hint{color:#7c6550}
+  #panel .grid button span{font-family:"Noto Serif TC","PMingLiU",Georgia,serif}
+  #panel .row button{border-radius:9px}
+  #panel .slider input{accent-color:#8a5a3b}
+  #panel{width:320px}
+  #panel .tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px}
+  #panel .tab{padding:7px 4px;border-radius:9px;font-family:"Noto Serif TC","PMingLiU",Georgia,serif;font-size:13px;letter-spacing:.1em}
+  #panel .tab.on{background:#7c9a6d;border-color:#62805a;color:#fbfff4;box-shadow:0 2px 0 #62805a}
+  #panel .mbar{display:flex;align-items:center;gap:8px}
+  #panel .arr{width:30px;height:30px;border-radius:50%;font-size:16px;line-height:1;color:#5b3a24}
+  #panel .mname{flex:1;text-align:center;font-family:"Noto Serif TC","PMingLiU",Georgia,serif;font-size:15px;font-weight:700;color:#5b3a24;letter-spacing:.08em}
+  #panel .mrow{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:8px}
+  #panel .mrow button{padding:4px 10px;font-size:12px;border-radius:999px}
+  #panel .mode{font-size:10.5px;padding:2px 8px;border-radius:999px;background:#d9a441;color:#fffaf0;letter-spacing:.06em}
+  #panel .mode.fixed{background:#4f6d8f}
+  #panel .cform{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px}
+  #panel .cform input{font:inherit;font-size:12.5px;color:#3e2c20;padding:6px 8px;border-radius:8px;border:1.5px solid #dcc8a6;background:#fffdf7;outline:none;min-width:0;color-scheme:light}
+  #panel .cform input:focus{border-color:#c9a87c}
+  #panel #cTitle,#panel .sws,#panel .addbtn{grid-column:1/-1}
+  #panel .sws{display:flex;gap:8px;align-items:center}
+  #panel .sw{width:22px;height:22px;padding:0;border-radius:50%!important;background:var(--c)!important;border:2px solid #fffaf0!important;box-shadow:0 0 0 1.5px #dcc8a6!important}
+  #panel .sw.on{box-shadow:0 0 0 2.5px #5b3a24!important}
+  #panel .addbtn{padding:7px;border-radius:9px;background:#a8432f!important;color:#fff6ea!important;border-color:rgba(0,0,0,.12)!important;letter-spacing:.08em}
+  #panel .clist{margin-top:10px;max-height:190px;overflow-y:auto}
+  #panel .cev{display:flex;align-items:center;gap:8px;padding:6px 2px;border-bottom:1px dashed #dcc8a6;font-size:12.5px}
+  #panel .cev .bar{width:4px;align-self:stretch;border-radius:3px;background:var(--c)}
+  #panel .cev .when{flex:none;min-width:64px;font-size:11px;color:#5b3a24;font-family:"Noto Serif TC","PMingLiU",Georgia,serif;white-space:pre-line;line-height:1.3}
+  #panel .cev .what{flex:1;min-width:0;overflow-wrap:anywhere}
+  #panel .cev .del{flex:none;width:24px;height:24px;padding:0;border-radius:50%;color:#a8432f;font-size:12px;line-height:1}
+  #panel .cempty{font-size:12px;color:#7c6550;text-align:center;padding:10px 0 2px}
+
+  /* 右下角創作人署名（在 Windows 工作列上方） */
+  #credit{position:fixed;right:28px;bottom:58px;z-index:4;pointer-events:none;font-size:13px;letter-spacing:.22em;
+    color:rgba(253,243,223,.72);font-family:"Noto Serif TC","PMingLiU",Georgia,serif;text-shadow:0 1px 6px rgba(0,0,0,.6)}
+  #ui{bottom:96px!important}
+
+  /* 桌面月曆（滑鼠穿透，只負責顯示） */
+  #cal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:29vw;height:56vh;display:flex;flex-direction:column;gap:1.1vh;
+    padding:2.2vh 1.5vw 1.8vh;border-radius:1.3vw;background:rgba(12,14,38,.34);border:1px solid rgba(255,240,200,.13);
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);box-shadow:0 1vh 4vh rgba(0,0,0,.25);
+    pointer-events:none;z-index:2;color:var(--ui-text)}
+  .cal-head{display:flex;align-items:baseline;gap:.9vw}
+  .cal-m{font-size:clamp(26px,3.1vw,64px);font-weight:700;letter-spacing:.04em;line-height:1;color:#fff4d6;text-shadow:0 0 1.2vw rgba(245,207,71,.25)}
+  .cal-meta{display:flex;flex-direction:column;gap:.35vh}
+  .cal-y{font-size:clamp(11px,.85vw,18px);color:var(--ui-accent);letter-spacing:.18em}
+  .cal-sub{font-size:clamp(10px,.72vw,15px);color:var(--ui-dim);letter-spacing:.06em}
+  .cal-week,.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:.35vw}
+  .cal-week div{text-align:center;font-size:clamp(10px,.72vw,15px);color:var(--ui-dim);letter-spacing:.1em}
+  .cal-week div:first-child,.cal-day.sun .cal-n{color:#f4a3af}
+  .cal-week div:last-child,.cal-day.sat .cal-n{color:#a9c8ff}
+  .cal-grid{flex:1;min-height:0}
+  .cal-day{position:relative;min-width:0;min-height:0;overflow:hidden;border-radius:.55vw;padding:.45vh .35vw;
+    background:rgba(255,255,255,.035);border:1px solid transparent;display:flex;flex-direction:column;gap:.25vh}
+  .cal-day.out{opacity:.32}
+  .cal-day.today{background:rgba(245,207,71,.14);border-color:rgba(245,207,71,.55)}
+  .cal-day.today .cal-n{color:var(--ui-accent);font-weight:700}
+  .cal-n{font-size:clamp(10px,.78vw,16px);line-height:1.1}
+  .cal-ev{font-size:clamp(8px,.56vw,12px);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    padding:.1vh .25vw;border-radius:.3vw;background:rgba(255,255,255,.07);border-left:.18vw solid var(--c,#f5cf47)}
+  .cal-more{font-size:clamp(8px,.52vw,11px);color:var(--ui-dim)}
+  #err{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);color:#ccc;font-size:14px;display:none;text-align:center}
+</style>
+<script>
+  // Lively 可能在頁面還沒準備好時就送來設定，先排隊，準備好後再處理
+  window.__lpq = [];
+  window.livelyPropertyListener = (n, v) => window.__lpq.push([n, v]);
+</script>
+<!-- 離線版建置時，three.js 原始碼會被嵌入下面這個區塊 -->
+<script type="text/plain" id="three-src">/*THREE_SRC*/</script>
+</head>
+<body>
+<div id="err">星球載入失敗（three.js 未能載入）</div>
+<div id="credit">創作人 官毅明</div>
+<div id="cal" aria-label="月曆">
+  <div class="cal-head">
+    <div class="cal-m" id="calM"></div>
+    <div class="cal-meta"><div class="cal-y" id="calY"></div><div class="cal-sub" id="calSub"></div></div>
+  </div>
+  <div class="cal-week"><div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div></div>
+  <div class="cal-grid" id="calGrid"></div>
+</div>
+<div id="ui" class="dim">
+  <div id="panel" hidden>
+    <div class="tabs"><button class="tab on" data-tab="res">❦ 星球居民</button><button class="tab" data-tab="cal">❦ 行事曆</button></div>
+    <div data-pane="res">
+    <div class="ttl">新增星球居民</div>
+    <div class="grid">
+      <button data-add="fox">🦊<span>狐狸</span></button>
+      <button data-add="sheep">🐑<span>綿羊</span></button>
+      <button data-add="snake">🐍<span>小蛇</span></button>
+      <button data-add="bird">🐦<span>小鳥</span></button>
+      <button data-add="butterfly">🦋<span>蝴蝶</span></button>
+      <button data-add="rabbit">🐇<span>兔子</span></button>
+    </div>
+    <div class="row">
+      <button id="shower">☄️ 流星雨</button>
+      <button id="undo">↶ 移除一隻</button>
+      <button id="clear">清空</button>
+    </div>
+    <label class="slider">自轉速度 <input id="spd" type="range" min="0" max="100" value="35"></label>
+    <label class="slider">流星頻率 <input id="met" type="range" min="0" max="100" value="50"></label>
+    <div class="hint">點一下星球上的居民或星球旅人，可以和他們打招呼。居民會自己散步、相遇、打招呼，綿羊會去吃猴麵包樹苗。</div>
+    </div>
+    <div data-pane="cal" hidden>
+      <div class="mbar">
+        <button class="arr" id="cPrev" title="上個月">‹</button>
+        <div class="mname" id="cName"></div>
+        <button class="arr" id="cNext" title="下個月">›</button>
+      </div>
+      <div class="mrow"><span class="mode" id="cMode"></span><button id="cNow">回到本月</button></div>
+      <div class="cform">
+        <input type="date" id="cDate" title="日期">
+        <input type="time" id="cTime" title="時間（可不填）">
+        <input type="text" id="cTitle" maxlength="40" placeholder="行程內容（按 Enter 加入）">
+        <div class="sws" id="cSw">
+          <button class="sw on" style="--c:#a8432f" data-c="#a8432f" title="穀倉紅"></button>
+          <button class="sw" style="--c:#7c9a6d" data-c="#7c9a6d" title="鼠尾草綠"></button>
+          <button class="sw" style="--c:#d9a441" data-c="#d9a441" title="芥末黃"></button>
+          <button class="sw" style="--c:#4f6d8f" data-c="#4f6d8f" title="丹寧藍"></button>
+          <button class="sw" style="--c:#a07cb0" data-c="#a07cb0" title="薰衣草紫"></button>
+        </div>
+        <button id="cAdd" class="addbtn">＋ 加入行程</button>
+      </div>
+      <div class="clist" id="cList"></div>
+    </div>
+  </div>
+  <button id="toggle">✦ 星球居民及行事曆<b id="count">0</b></button>
+</div>
+
+<script type="module">
+// three.js：離線版從頁面內嵌的原始碼載入（file:// 也能用），開發版退回 CDN
+const _src = document.getElementById('three-src').textContent;
+const THREE = _src.length > 10000
+  ? await import(URL.createObjectURL(new Blob([_src], { type: 'text/javascript' })))
+  : await import('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js');
+const PARAMS = new URLSearchParams(location.search);
+const WALL = PARAMS.has('wallpaper');           // 由安裝程式設為桌布時的模式
+const MIRROR = PARAMS.get('mirror');            // 其他螢幕上的複本：只顯示，不存檔、不接收指令
+const DISPLAY_KEY = 'planet-wallpaper-display';    // 'primary' | 'secondary' | 'all'
+
+/* ================= 基本工具 ================= */
+const rand = (a, b) => a + Math.random() * (b - a);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const UP = new THREE.Vector3(0, 1, 0);
+const R = 3;                 // 星球半徑
+const PRINCE_H = 0.92;       // 星球旅人身高（含頭髮）
+
+function hash3(x, y, z) { const h = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453; return h - Math.floor(h); }
+function vnoise(x, y, z) {
+  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+  const xf = x - xi, yf = y - yi, zf = z - zi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), w = zf * zf * (3 - 2 * zf);
+  const L = (a, b, t) => a + (b - a) * t;
+  return L(
+    L(L(hash3(xi, yi, zi), hash3(xi + 1, yi, zi), u), L(hash3(xi, yi + 1, zi), hash3(xi + 1, yi + 1, zi), u), v),
+    L(L(hash3(xi, yi, zi + 1), hash3(xi + 1, yi, zi + 1), u), L(hash3(xi, yi + 1, zi + 1), hash3(xi + 1, yi + 1, zi + 1), u), v), w);
+}
+function fbm(x, y, z, o = 4) { let s = 0, a = .5, f = 1, n = 0; for (let i = 0; i < o; i++) { s += a * vnoise(x * f, y * f, z * f); n += a; a *= .5; f *= 2.03; } return s / n; }
+function dirFrom(lat, lon) {
+  const la = lat * Math.PI / 180, lo = lon * Math.PI / 180;
+  return new THREE.Vector3(Math.cos(la) * Math.sin(lo), Math.sin(la), Math.cos(la) * Math.cos(lo));
+}
+function randUnit() {
+  const u = rand(-1, 1), th = rand(0, Math.PI * 2), s = Math.sqrt(1 - u * u);
+  return new THREE.Vector3(s * Math.cos(th), u, s * Math.sin(th));
+}
+
+/* 地形高度：fbm 起伏 + 隕石坑，北極（星球旅人站的地方）壓平 */
+const CRATERS = [[dirFrom(8, 70), .13, .05], [dirFrom(-25, 150), .18, .06], [dirFrom(-50, -40), .15, .05],
+                 [dirFrom(30, -150), .1, .04], [dirFrom(-12, -95), .09, .035]];
+function heightAt(d) {
+  let h = (fbm(d.x * 1.7 + 11, d.y * 1.7 + 3, d.z * 1.7 + 7, 4) - .5) * .22;
+  h += (vnoise(d.x * 7, d.y * 7, d.z * 7) - .5) * .03;
+  for (const [cd, cr, dep] of CRATERS) {
+    const a = Math.acos(clamp(d.dot(cd), -1, 1)) / cr;
+    if (a < 1.6) { if (a < 1) h -= (1 - a * a) * dep; h += Math.exp(-(((a - 1) / .2) ** 2)) * dep * .45; }
+  }
+  return R + h * (1 - smooth(.9, .975, d.y) * .9);
+}
+
+/* ================= 渲染器 / 場景 ================= */
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'low-power' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+const CAM_Z = 22;
+const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, .1, 600);
+camera.position.set(0, 0, CAM_Z);
+
+const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: .78, metalness: 0, ...o });
+const mesh = (g, m, x = 0, y = 0, z = 0) => { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); return o; };
+const sph = (r, m, x, y, z, ws = 14, hs = 10) => mesh(new THREE.SphereGeometry(r, ws, hs), m, x, y, z);
+
+function canvasTex(size, draw) {
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  draw(c.getContext('2d'), size);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const softTex = canvasTex(128, (g, s) => {
+  const gr = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.4, 'rgba(255,255,255,.5)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, s, s);
+});
+
+/* ---------- 宇宙背景：星雲 + 銀河帶 ---------- */
+const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 32), new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false,
+  uniforms: { uTime: { value: 0 } },
+  vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+  fragmentShader: `
+    uniform float uTime; varying vec3 vDir;
+    float hash(vec3 p){ p = fract(p*0.3183099+.1); p *= 17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
+    float noise(vec3 x){ vec3 i=floor(x), f=fract(x); f=f*f*(3.-2.*f);
+      return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x), mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
+                 mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x), mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y), f.z); }
+    float fbm(vec3 p){ float s=0., a=.5; for(int i=0;i<5;i++){ s+=a*noise(p); p*=2.03; a*=.5; } return s; }
+    void main(){
+      vec3 d = normalize(vDir);
+      vec3 col = mix(vec3(.012,.014,.04), vec3(.035,.03,.09), smoothstep(-.7,.8,d.y));
+      float n  = fbm(d*2.3 + vec3(0., uTime*.003, 0.));
+      float n2 = fbm(d*4.6 + vec3(5.2, 1.3, uTime*.004));
+      float n3 = fbm(d*9.0 + vec3(2.1, 7.7, 3.3));
+      vec3 bandN = normalize(vec3(.38, 1., .22));
+      float band = exp(-pow(dot(d, bandN)/.3, 2.));
+      vec3 neb = vec3(.36,.13,.5) * smoothstep(.42,.82,n) * .8
+               + vec3(.05,.3,.45) * smoothstep(.48,.88,n2) * .65
+               + vec3(.55,.22,.35) * smoothstep(.6,.9,n*n2*1.6) * .35;
+      col += neb * (.28 + .9*band);
+      col += vec3(.16,.14,.22) * band * smoothstep(.35,.8,n3) * .55;
+      gl_FragColor = vec4(col, 1.);
+    }`
+}));
+scene.add(sky);
+
+/* ---------- 星星（會閃爍） ---------- */
+const STAR_N = 3200;
+const starGeo = new THREE.BufferGeometry();
+{
+  const p = new Float32Array(STAR_N * 3), s = new Float32Array(STAR_N), ph = new Float32Array(STAR_N), c = new Float32Array(STAR_N * 3);
+  const palette = [[1, 1, 1], [.75, .85, 1], [1, .9, .72], [1, .78, .8]];
+  for (let i = 0; i < STAR_N; i++) {
+    const d = randUnit(); if (d.z > .3) d.z = -d.z;
+    const r = rand(150, 260);
+    p.set([d.x * r, d.y * r, d.z * r], i * 3);
+    s[i] = Math.random() < .04 ? rand(3.5, 6) : rand(1, 2.6);
+    ph[i] = Math.random();
+    const col = pick(palette); c.set(col, i * 3);
+  }
+  starGeo.setAttribute('position', new THREE.BufferAttribute(p, 3));
+  starGeo.setAttribute('aSize', new THREE.BufferAttribute(s, 1));
+  starGeo.setAttribute('aPhase', new THREE.BufferAttribute(ph, 1));
+  starGeo.setAttribute('aColor', new THREE.BufferAttribute(c, 3));
+}
+const starMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  uniforms: { uTime: { value: 0 }, uPR: { value: renderer.getPixelRatio() } },
+  vertexShader: `attribute float aSize; attribute float aPhase; attribute vec3 aColor;
+    uniform float uTime; uniform float uPR; varying vec3 vC; varying float vA;
+    void main(){ vec4 mv = modelViewMatrix*vec4(position,1.); gl_Position = projectionMatrix*mv;
+      float tw = .6 + .4*sin(uTime*(.6+aPhase*2.2) + aPhase*40.);
+      vA = tw; vC = aColor; gl_PointSize = aSize*uPR*(.75+.35*tw); }`,
+  fragmentShader: `varying vec3 vC; varying float vA;
+    void main(){ vec2 c = gl_PointCoord-.5; float r = length(c);
+      float a = pow(smoothstep(.5,0.,r), 2.2);
+      float cross = max(smoothstep(.06,0.,abs(c.x))*smoothstep(.5,0.,abs(c.y)), smoothstep(.06,0.,abs(c.y))*smoothstep(.5,0.,abs(c.x)))*.35;
+      gl_FragColor = vec4(vC, (a+cross)*vA); }`
+});
+const stars = new THREE.Points(starGeo, starMat);
+scene.add(stars);
+
+/* ---------- 燈光 ---------- */
+scene.add(new THREE.HemisphereLight(0xa8b8ff, 0x3a2440, .75));
+const sun = new THREE.DirectionalLight(0xffe4b8, 2.6);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+Object.assign(sun.shadow.camera, { left: -4.6, right: 4.6, top: 4.6, bottom: -4.6, near: 1, far: 40 });
+sun.shadow.bias = -.0006; sun.shadow.normalBias = .025;
+scene.add(sun);
+const rimLight = new THREE.DirectionalLight(0x8fb4ff, 1.1);
+scene.add(rimLight);
+
+/* ---------- 遠方的行星 ---------- */
+const farGroup = new THREE.Group(); scene.add(farGroup);
+
+/* ---------- 會自轉的遠方星球 ---------- */
+// 岩石星球：頂點顏色依雜訊混色，表面微微起伏
+function rockyPlanet(r, colors, bump = .05, seg = 48, seed = 0) {
+  const g = new THREE.SphereGeometry(r, seg, Math.round(seg * .75));
+  const pos = g.attributes.position, col = new Float32Array(pos.count * 3), v = new THREE.Vector3(), c = new THREE.Color();
+  const cs = colors.map(h => new THREE.Color(h));
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).normalize();
+    const n = fbm(v.x * 2.2 + seed, v.y * 2.2 + seed * .7, v.z * 2.2, 4);
+    v.multiplyScalar(r * (1 + (n - .5) * bump));
+    pos.setXYZ(i, v.x, v.y, v.z);
+    const k = clamp((n - .3) / .45, 0, .999) * (cs.length - 1), j = Math.floor(k);
+    c.copy(cs[j]).lerp(cs[Math.min(j + 1, cs.length - 1)], k - j);
+    col.set([c.r, c.g, c.b], i * 3);
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 }));
+}
+// 氣態巨行星：橫向色帶貼圖
+const bandTex = canvasTex(256, (g, s) => {
+  const bands = ['#e9c79b', '#d49a6a', '#f3e1c2', '#c47f55', '#e8b98a', '#f6e8d0', '#b8734f', '#e2b48c'];
+  let y = 0;
+  while (y < s) { const h = 6 + Math.random() * 22; g.fillStyle = pick(bands); g.fillRect(0, y, s, h); y += h; }
+  g.globalAlpha = .18;
+  for (let i = 0; i < 40; i++) { g.fillStyle = pick(bands); g.beginPath(); g.ellipse(Math.random() * s, Math.random() * s, 20 + Math.random() * 40, 2 + Math.random() * 4, 0, 0, 7); g.fill(); }
+  g.globalAlpha = .55; g.fillStyle = '#b5553a'; g.beginPath(); g.ellipse(s * .62, s * .62, 22, 10, 0, 0, 7); g.fill();
+});
+const gasGiant = new THREE.Mesh(new THREE.SphereGeometry(4.2, 48, 32), new THREE.MeshStandardMaterial({ map: bandTex, roughness: .9 }));
+gasGiant.rotation.z = .18;
+const icePlanet = rockyPlanet(1.25, [0xbfd9f2, 0xe9f4ff, 0x9fc0e6, 0xffffff], .04, 40, 3);
+const iceHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, color: 0x9cc9ff, transparent: true, opacity: .35, depthWrite: false, blending: THREE.AdditiveBlending }));
+iceHalo.scale.setScalar(4.2); icePlanet.add(iceHalo);
+const greenPlanet = rockyPlanet(1.05, [0x2f6f8f, 0x3d8fa8, 0x6aa85a, 0x9cc46b, 0xd9cf9a], .03, 40, 7);
+const clouds = new THREE.Mesh(new THREE.SphereGeometry(1.1, 32, 24), new THREE.MeshStandardMaterial({
+  map: canvasTex(256, (g, s) => { g.fillStyle = 'rgba(255,255,255,0)'; g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 70; i++) { g.fillStyle = `rgba(255,255,255,${.15 + Math.random() * .35})`; g.beginPath(); g.ellipse(Math.random() * s, s * .15 + Math.random() * s * .7, 10 + Math.random() * 30, 3 + Math.random() * 6, 0, 0, 7); g.fill(); } }),
+  transparent: true, depthWrite: false, roughness: 1 }));
+greenPlanet.add(clouds);
+// 帶環行星（表面有花紋，才看得出自轉）與小月亮
+const ringPlanet = new THREE.Group();
+const ringBody = rockyPlanet(1.5, [0xb77fa8, 0xd7a3c9, 0xf0c9dc, 0xc98fb5], .02, 48, 13);
+{
+  const ring = mesh(new THREE.RingGeometry(2.0, 3.0, 64), new THREE.MeshBasicMaterial({ color: 0xf3d9b0, transparent: true, opacity: .45, side: THREE.DoubleSide }));
+  ring.rotation.x = Math.PI / 2.3;
+  ringPlanet.add(ringBody, ring); ringPlanet.rotation.z = .35;
+}
+const moon = rockyPlanet(.6, [0x6f8fb8, 0x8fb0d8, 0xc3d4ea], .06, 32, 21);
+farGroup.add(gasGiant, icePlanet, greenPlanet, ringPlanet, moon);
+// 緩慢自轉（弧度/秒）
+const SPINNERS = [[ringBody, .12], [moon, .16], [gasGiant, .07], [icePlanet, .1], [greenPlanet, .09], [clouds, .05]];
+
+/* ---------- 星球能量：平常微微呼吸發光，偶爾爆發一圈能量波與光點 ---------- */
+const waveTex = canvasTex(256, (g, s) => {
+  const gr = g.createRadialGradient(s / 2, s / 2, s * .3, s / 2, s / 2, s * .5);
+  gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(.6, 'rgba(255,255,255,.95)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, s, s);
+});
+const energies = [];
+function addEnergy(holder, r, color) {
+  const sp = (map, op) => new THREE.Sprite(new THREE.SpriteMaterial({ map, color, transparent: true, opacity: op, depthWrite: false, blending: THREE.AdditiveBlending }));
+  const aura = sp(softTex, .2); aura.scale.setScalar(r * 3.4);
+  const wave = sp(waveTex, 0); wave.scale.setScalar(r * 2.2);
+  const sparks = [];
+  for (let i = 0; i < 14; i++) { const s = sp(softTex, 0); s.scale.setScalar(r * .2); s.userData.dir = randUnit(); sparks.push(s); }
+  holder.add(aura, wave, ...sparks);
+  energies.push({ r, aura, wave, sparks, t: -1, next: rand(2, 12), dur: rand(2.4, 3.4), ph: Math.random() * 6 });
+}
+addEnergy(ringPlanet, 1.5, 0xffb8e0);
+addEnergy(moon, .6, 0xa9c8ff);
+addEnergy(gasGiant, 4.2, 0xffc890);
+addEnergy(icePlanet, 1.25, 0x9cd8ff);
+addEnergy(greenPlanet, 1.05, 0x9effc4);
+function updEnergy(dt, t) {
+  for (const e of energies) {
+    let glow = .16 + Math.sin(t * .7 + e.ph) * .06, size = 3.4;
+    if (e.t < 0) {
+      e.next -= dt;
+      if (e.next < 0) { e.t = 0; e.sparks.forEach(s => s.userData.dir = randUnit()); }
+    } else {
+      e.t += dt;
+      const k = Math.min(1, e.t / e.dur), swell = Math.sin(Math.PI * Math.min(1, k * 1.6));
+      glow += .5 * swell; size += 1.3 * swell;
+      e.wave.scale.setScalar(e.r * (2.2 + k * 5));
+      e.wave.material.opacity = (1 - k) * .6 * Math.min(1, k * 8);
+      e.sparks.forEach(s => { s.position.copy(s.userData.dir).multiplyScalar(e.r * (1.05 + k * 2.4)); s.material.opacity = (1 - k) * .9 * Math.min(1, k * 6); });
+      if (k >= 1) { e.t = -1; e.next = rand(8, 20); e.wave.material.opacity = 0; e.sparks.forEach(s => s.material.opacity = 0); }
+    }
+    e.aura.material.opacity = glow; e.aura.scale.setScalar(e.r * size);
+  }
+}
+
+/* ================= 星球桌布 ================= */
+const planetPivot = new THREE.Group();          // 固定傾斜
+planetPivot.rotation.set(.38, 0, .08);
+scene.add(planetPivot);
+const planet = new THREE.Group();               // 繞自身軸自轉
+planetPivot.add(planet);
+sun.target = planetPivot;
+
+{
+  const g = new THREE.SphereGeometry(1, 180, 130);
+  const pos = g.attributes.position, col = new Float32Array(pos.count * 3);
+  const cSand = new THREE.Color(0xeccb98), cMoss = new THREE.Color(0xadc47f), cDeep = new THREE.Color(0x86a866),
+        cDust = new THREE.Color(0xe3a888), cCrat = new THREE.Color(0xb48b6c), tc = new THREE.Color();
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).normalize();
+    const h = heightAt(v);
+    pos.setXYZ(i, v.x * h, v.y * h, v.z * h);
+    const n1 = fbm(v.x * 2.4 + 5, v.y * 2.4, v.z * 2.4, 4), n2 = fbm(v.x * 5 + 1, v.y * 5 + 9, v.z * 5, 3);
+    tc.copy(cSand).lerp(cMoss, smooth(.44, .6, n1)).lerp(cDeep, smooth(.6, .74, n1) * .7);
+    tc.lerp(cDust, smooth(.55, .75, n2) * (1 - smooth(.44, .6, n1)) * .6);
+    for (const [cd, cr] of CRATERS) { const a = Math.acos(clamp(v.dot(cd), -1, 1)) / cr; if (a < 1.15) tc.lerp(cCrat, (1.15 - a) * .55); }
+    tc.offsetHSL(0, 0, (hash3(v.x * 300, v.y * 300, v.z * 300) - .5) * .05);
+    col.set([tc.r, tc.g, tc.b], i * 3);
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  const ground = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95, metalness: 0 }));
+  ground.receiveShadow = true;
+  ground.name = 'ground';
+  planet.add(ground);
+}
+
+/* 大氣邊緣光 + 光暈 */
+{
+  const rim = new THREE.Mesh(new THREE.SphereGeometry(R * 1.04, 64, 48), new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { uColor: { value: new THREE.Color(0xa9cbff) } },
+    vertexShader: `varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix*vec4(position,1.);
+      vN = normalize(normalMatrix*normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }`,
+    fragmentShader: `uniform vec3 uColor; varying vec3 vN; varying vec3 vV;
+      void main(){ float f = 1. - max(dot(normalize(vN), normalize(vV)), 0.); gl_FragColor = vec4(uColor, pow(f, 2.6) * smoothstep(1., .8, f) * 1.1); }`
+  }));
+  planetPivot.add(rim);
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, color: 0x7d9cff, transparent: true, opacity: .42, depthWrite: false, blending: THREE.AdditiveBlending }));
+  halo.scale.setScalar(R * 3.6);
+  planetPivot.add(halo);
+}
+
+/* 放置工具：把物件擺到星球表面（planet 座標） */
+const _q = new THREE.Quaternion(), _qy = new THREE.Quaternion();
+function placeOn(o, d, yaw = 0, lift = 0) {
+  o.position.copy(d).multiplyScalar(heightAt(d) + lift);
+  o.quaternion.setFromUnitVectors(UP, d).multiply(_qy.setFromAxisAngle(UP, yaw));
+}
+function shadowAll(o) { o.traverse(m => { if (m.isMesh) { m.castShadow = true; } }); }
+
+/* 障礙物（居民會繞開） */
+const OBST = [];
+
+/* ---------- 火山 ---------- */
+const volcanoes = [];
+function makeVolcano(d, active) {
+  const g = new THREE.Group();
+  const rock = M(0xa06d55), dark = M(0x5a3c33);
+  g.add(mesh(new THREE.CylinderGeometry(.13, .42, .44, 20), rock, 0, .17, 0));
+  g.add(mesh(new THREE.CylinderGeometry(.3, .38, .06, 20), M(0x8a5b47), 0, .06, 0));
+  const lip = mesh(new THREE.TorusGeometry(.13, .035, 8, 20), rock, 0, .39, 0); lip.rotation.x = Math.PI / 2; g.add(lip);
+  const mouthMat = active ? new THREE.MeshStandardMaterial({ color: 0xff8a3a, emissive: 0xff5a1a, emissiveIntensity: 1.8 }) : dark;
+  const mouth = mesh(new THREE.CircleGeometry(.12, 20), mouthMat, 0, .385, 0); mouth.rotation.x = -Math.PI / 2; g.add(mouth);
+  shadowAll(g);
+  const smoke = [];
+  if (active) for (let i = 0; i < 6; i++) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, color: 0xe2dcef, transparent: true, depthWrite: false, opacity: 0 }));
+    s.userData.p = i / 6; g.add(s); smoke.push(s);
+  }
+  placeOn(g, d, rand(0, 6), -.05);
+  planet.add(g);
+  volcanoes.push({ g, mouthMat, active, smoke, ph: Math.random() * 10 });
+  OBST.push({ dir: d, r: .46 });
+}
+makeVolcano(dirFrom(36, 32), true);
+makeVolcano(dirFrom(26, 98), true);
+makeVolcano(dirFrom(42, -128), false);
+
+/* ---------- 玫瑰與玻璃罩 ---------- */
+const ROSE_DIR = dirFrom(73, -52);
+let roseBloom;
+{
+  const g = new THREE.Group();
+  const leafM = M(0x3f8240);
+  g.add(mesh(new THREE.CylinderGeometry(.011, .014, .28, 6), leafM, 0, .14, 0));
+  for (const s of [-1, 1]) { const l = sph(.04, leafM, s * .04, .1, 0, 8, 6); l.scale.set(1.3, .35, .7); l.rotation.z = s * .5; g.add(l); }
+  roseBloom = new THREE.Group(); roseBloom.position.y = .3; g.add(roseBloom);
+  const red = M(0xd83a50, { roughness: .55 }), red2 = M(0xb52a42, { roughness: .55 });
+  roseBloom.add(sph(.036, red2, 0, .015, 0, 10, 8));
+  for (let i = 0; i < 6; i++) {
+    const a = i / 6 * Math.PI * 2;
+    const p = sph(.04, red, Math.cos(a) * .03, 0, Math.sin(a) * .03, 10, 8);
+    p.scale.set(.6, .85, 1); p.lookAt(Math.cos(a) * .2, .1, Math.sin(a) * .2); roseBloom.add(p);
+  }
+  const glass = new THREE.MeshPhysicalMaterial({ color: 0xe6f6ff, transparent: true, opacity: .2, roughness: .04, metalness: 0, clearcoat: 1, side: THREE.DoubleSide, depthWrite: false });
+  const cyl = mesh(new THREE.CylinderGeometry(.2, .21, .26, 28, 1, true), glass, 0, .13, 0);
+  const cap = mesh(new THREE.SphereGeometry(.2, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2), glass, 0, .26, 0);
+  const knob = sph(.028, glass, 0, .47, 0); knob.material = new THREE.MeshPhysicalMaterial({ color: 0xe6f6ff, transparent: true, opacity: .5, roughness: .05 });
+  cyl.renderOrder = cap.renderOrder = 3;
+  g.add(cyl, cap, knob);
+  const ring = mesh(new THREE.TorusGeometry(.205, .012, 6, 28), M(0xd7c6a2, { metalness: .4, roughness: .4 }), 0, .01, 0); ring.rotation.x = Math.PI / 2; g.add(ring);
+  shadowAll(g); cyl.castShadow = cap.castShadow = false;
+  placeOn(g, ROSE_DIR, 0, -.01);
+  planet.add(g);
+  OBST.push({ dir: ROSE_DIR, r: .27 });
+}
+
+/* ---------- 路燈（會自己點亮、熄滅） ---------- */
+const lamp = {};
+{
+  const d = dirFrom(14, -18);
+  const g = new THREE.Group(); const iron = M(0x2e3244, { metalness: .5, roughness: .45 });
+  g.add(mesh(new THREE.CylinderGeometry(.018, .028, .66, 8), iron, 0, .33, 0));
+  g.add(mesh(new THREE.CylinderGeometry(.05, .06, .04, 10), iron, 0, .02, 0));
+  lamp.glassMat = new THREE.MeshStandardMaterial({ color: 0xffe7b0, emissive: 0xffbe55, emissiveIntensity: 2.4 });
+  g.add(mesh(new THREE.BoxGeometry(.075, .1, .075), lamp.glassMat, 0, .71, 0));
+  for (const [x, z] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) g.add(mesh(new THREE.BoxGeometry(.012, .11, .012), iron, x * .04, .71, z * .04));
+  g.add(mesh(new THREE.ConeGeometry(.07, .07, 4), iron, 0, .795, 0));
+  g.add(sph(.014, iron, 0, .84, 0, 6, 4));
+  shadowAll(g); g.children[2].castShadow = false;
+  lamp.light = new THREE.PointLight(0xffc06a, 3, 2.6, 1.4); lamp.light.position.y = .71; g.add(lamp.light);
+  placeOn(g, d, .4, -.02);
+  planet.add(g);
+  lamp.on = true; lamp.t = rand(12, 20); lamp.level = 1;
+  OBST.push({ dir: d, r: .12 });
+}
+
+/* ---------- 猴麵包樹（大）---------- */
+{
+  const d = dirFrom(-6, 182);
+  const g = new THREE.Group(); const bark = M(0x8d5c3d), leaf = M(0x5b9a46), leaf2 = M(0x4a8738);
+  g.add(mesh(new THREE.CylinderGeometry(.11, .22, .6, 12), bark, 0, .28, 0));
+  for (let i = 0; i < 4; i++) {
+    const a = i / 4 * Math.PI * 2 + .3;
+    const b = mesh(new THREE.CylinderGeometry(.025, .045, .34, 6), bark, Math.cos(a) * .1, .66, Math.sin(a) * .1);
+    b.rotation.set(Math.sin(a) * .7, 0, -Math.cos(a) * .7); g.add(b);
+    const c = sph(rand(.16, .22), i % 2 ? leaf : leaf2, Math.cos(a) * .22, .82, Math.sin(a) * .22, 12, 8);
+    c.scale.y = .6; g.add(c);
+  }
+  const top = sph(.2, leaf, 0, .9, 0, 12, 8); top.scale.y = .6; g.add(top);
+  shadowAll(g);
+  placeOn(g, d, 0, -.04);
+  planet.add(g);
+  OBST.push({ dir: d, r: .32 });
+}
+
+/* ---------- 小椅子（看夕陽用） ---------- */
+{
+  const d = dirFrom(70, 130);
+  const g = new THREE.Group(); const wood = M(0xb8794a);
+  g.add(mesh(new THREE.BoxGeometry(.16, .022, .16), wood, 0, .14, 0));
+  for (const [x, z] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) g.add(mesh(new THREE.CylinderGeometry(.01, .01, .14, 5), wood, x * .065, .07, z * .065));
+  g.add(mesh(new THREE.BoxGeometry(.16, .15, .02), wood, 0, .23, -.07));
+  shadowAll(g);
+  placeOn(g, d, 2.2, 0);
+  planet.add(g);
+  OBST.push({ dir: d, r: .14 });
+}
+
+/* 北極的星球旅人也是障礙物 */
+OBST.push({ dir: UP, r: .2 });
+
+function blocked(d, margin = .1) { for (const o of OBST) if (Math.acos(clamp(d.dot(o.dir), -1, 1)) * R < o.r + margin) return true; return false; }
+
+/* ---------- 草叢、小花、石頭（Instanced） ---------- */
+const FLOWER_DIRS = [];
+{
+  const dummy = new THREE.Object3D();
+  const grassG = new THREE.ConeGeometry(.022, .11, 4); grassG.translate(0, .05, 0);
+  const grass = new THREE.InstancedMesh(grassG, M(0xffffff, { roughness: 1 }), 260);
+  const gc = new THREE.Color();
+  for (let i = 0; i < grass.count; i++) {
+    let d; do d = randUnit(); while (blocked(d, .05));
+    placeOn(dummy, d, rand(0, 6), -.01); dummy.scale.setScalar(rand(.6, 1.4)); dummy.updateMatrix();
+    grass.setMatrixAt(i, dummy.matrix); grass.setColorAt(i, gc.setHSL(rand(.22, .3), rand(.35, .55), rand(.32, .45)));
+  }
+  planet.add(grass);
+
+  const flowers = new THREE.InstancedMesh(new THREE.SphereGeometry(.026, 6, 5), M(0xffffff, { roughness: .6 }), 60);
+  const fcols = [0xffd1e3, 0xfff1a6, 0xc9d8ff, 0xffffff, 0xffb38a];
+  for (let i = 0; i < flowers.count; i++) {
+    let d; do d = randUnit(); while (blocked(d, .08));
+    if (i < 16) FLOWER_DIRS.push(d);
+    placeOn(dummy, d, 0, .035); dummy.scale.setScalar(rand(.7, 1.2)); dummy.updateMatrix();
+    flowers.setMatrixAt(i, dummy.matrix); flowers.setColorAt(i, gc.setHex(pick(fcols)));
+  }
+  planet.add(flowers);
+
+  const stones = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(.05, 0), M(0xa19388, { roughness: 1 }), 34);
+  for (let i = 0; i < stones.count; i++) {
+    let d; do d = randUnit(); while (blocked(d, .05));
+    placeOn(dummy, d, rand(0, 6), 0); dummy.scale.set(rand(.6, 1.6), rand(.4, .9), rand(.6, 1.6)); dummy.updateMatrix();
+    stones.setMatrixAt(i, dummy.matrix);
+  }
+  stones.castShadow = true;
+  planet.add(stones);
+}
+
+/* ---------- 猴麵包樹苗（綿羊會吃） ---------- */
+const sprouts = [];
+function randomFreeDir(visible) {
+  planet.updateMatrixWorld();
+  const q = planet.getWorldQuaternion(new THREE.Quaternion());
+  const toCam = camera.position.clone().sub(planet.getWorldPosition(new THREE.Vector3())).normalize();
+  for (let k = 0; k < 120; k++) {
+    const d = randUnit();
+    if (d.y < -.55 || blocked(d, .15)) continue;
+    if (visible && d.clone().applyQuaternion(q).dot(toCam) < .38) continue;
+    return d;
+  }
+  let d; do d = randUnit(); while (blocked(d, .1)); return d;
+}
+function makeSprout() {
+  const g = new THREE.Group(); const gm = M(0x6cc25a);
+  g.add(mesh(new THREE.CylinderGeometry(.008, .012, .12, 5), M(0x6b8f3a), 0, .06, 0));
+  const leaves = [];
+  for (const s of [-1, 1]) { const l = sph(.035, gm, s * .035, .12, 0, 8, 6); l.scale.set(1.4, .3, .7); l.rotation.z = s * .35; g.add(l); leaves.push(l); }
+  shadowAll(g);
+  planet.add(g);
+  const s = { g, leaves, dir: null, alive: false, scale: 0, targeted: null, respawn: rand(1, 6) };
+  sprouts.push(s); g.visible = false;
+}
+for (let i = 0; i < 5; i++) makeSprout();
+function eatSprout(s) { s.alive = false; s.g.visible = false; s.respawn = rand(18, 32); s.targeted = null; }
+
+/* ================= 表情泡泡 ================= */
+const emojiCache = new Map();
+function emojiTex(e) {
+  if (!emojiCache.has(e)) emojiCache.set(e, canvasTex(128, (g, s) => {
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = `92px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif`;
+    g.shadowColor = 'rgba(255,255,255,.55)'; g.shadowBlur = 14;
+    g.fillStyle = '#fff'; g.fillText(e, s / 2, s / 2 + 6);
+  }));
+  return emojiCache.get(e);
+}
+const bubbles = [];
+function bubble(obj, e, y = .45, size = .26) {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: emojiTex(e), transparent: true, depthWrite: false, opacity: 0 }));
+  s.scale.setScalar(size); s.position.y = y; obj.add(s);
+  bubbles.push({ s, y, age: 0 });
+}
+function updateBubbles(dt) {
+  for (let i = bubbles.length - 1; i >= 0; i--) {
+    const b = bubbles[i]; b.age += dt;
+    b.s.position.y = b.y + b.age * .16;
+    b.s.material.opacity = b.age < .2 ? b.age / .2 : clamp(1 - (b.age - 1.3) / .6, 0, 1);
+    if (b.age > 1.9 || !b.s.parent) { b.s.parent && b.s.parent.remove(b.s); b.s.material.dispose(); bubbles.splice(i, 1); }
+  }
+}
+
+/* ================= 星球旅人 ================= */
+const prince = { g: new THREE.Group(), yaw: 0, wave: 0, lookT: 0, lookRose: 0 };
+{
+  const g = prince.g;
+  const skin = M(0xf8dcc6, { roughness: .6 }), hair = M(0xf5cf47, { roughness: .55 }), coat = M(0x3f8f6a),
+        pants = M(0x3d6a5c), boot = M(0x5a3b28), trim = M(0xf2d27a), eye = M(0x2a2a36);
+  for (const s of [-1, 1]) {
+    const b = sph(.048, boot, s * .05, .03, .02, 10, 8); b.scale.set(1, .7, 1.5); g.add(b);
+    g.add(mesh(new THREE.CylinderGeometry(.03, .032, .22, 8), pants, s * .05, .14, 0));
+  }
+  prince.body = new THREE.Group(); g.add(prince.body);
+  prince.body.add(mesh(new THREE.CylinderGeometry(.1, .2, .32, 20), coat, 0, .37, 0));
+  prince.body.add(mesh(new THREE.CylinderGeometry(.2, .205, .03, 20), trim, 0, .215, 0));
+  prince.body.add(mesh(new THREE.CylinderGeometry(.088, .1, .14, 16), coat, 0, .58, 0));
+  for (const s of [-1, 1]) {                      // 肩上的小星星
+    const st = mesh(new THREE.OctahedronGeometry(.022, 0), trim, s * .075, .64, .04); prince.body.add(st);
+  }
+  prince.head = new THREE.Group(); prince.head.position.y = .76; prince.body.add(prince.head);
+  prince.head.add(sph(.115, skin, 0, 0, 0, 20, 16));
+  for (const s of [-1, 1]) {
+    prince.head.add(sph(.014, eye, s * .042, .005, .105, 8, 6));
+    const ck = sph(.02, M(0xf3a0a0, { roughness: .8 }), s * .068, -.035, .088, 8, 6); ck.scale.z = .4; prince.head.add(ck);
+  }
+  prince.head.add(mesh(new THREE.SphereGeometry(.122, 20, 10, 0, Math.PI * 2, 0, Math.PI * .45), hair, 0, .01, -.005));
+  for (let i = 0; i < 11; i++) {                  // 金色亂髮
+    const a = i / 11 * Math.PI * 2, el = rand(.35, .9);
+    const c = mesh(new THREE.ConeGeometry(.032, .11, 6), hair);
+    const dir = new THREE.Vector3(Math.cos(a) * Math.cos(el), Math.sin(el), Math.sin(a) * Math.cos(el));
+    c.position.copy(dir).multiplyScalar(.11); c.quaternion.setFromUnitVectors(UP, dir); prince.head.add(c);
+  }
+  prince.arms = [];
+  for (const s of [-1, 1]) {
+    const arm = new THREE.Group(); arm.position.set(s * .1, .63, 0);
+    const a = mesh(new THREE.CylinderGeometry(.024, .03, .2, 8), coat, 0, -.1, 0); arm.add(a);
+    arm.add(sph(.026, skin, 0, -.21, 0, 8, 6));
+    arm.rotation.z = s * .14; prince.body.add(arm); prince.arms.push(arm);
+  }
+  // 圍巾
+  const scarfM = M(0xf4c430, { roughness: .6, side: THREE.DoubleSide });
+  const ring = mesh(new THREE.TorusGeometry(.082, .026, 8, 18), scarfM, 0, .655, 0); ring.rotation.x = Math.PI / 2; prince.body.add(ring);
+  prince.scarf = [];
+  let parent = new THREE.Group(); parent.position.set(.03, .66, -.08); prince.body.add(parent);
+  for (let i = 0; i < 7; i++) {
+    const seg = new THREE.Group(); seg.position.z = i === 0 ? 0 : -.06;
+    const w = .055 - i * .004;
+    seg.add(mesh(new THREE.BoxGeometry(w, .012, .065), scarfM, 0, 0, -.03));
+    parent.add(seg); prince.scarf.push(seg); parent = seg;
+  }
+  shadowAll(g);
+  g.position.copy(UP).multiplyScalar(heightAt(UP) - .01);
+  planet.add(g);
+}
+function princeReact(e, wave = true) { if (wave) princeDo('wave', 2.4, null); bubble(prince.g, e, 1.12, .3); }
+
+/* ================= 居民 ================= */
+function legSet(parent, mat, pts, len, r = .02) {
+  const legs = [];
+  for (const [x, y, z] of pts) {
+    const p = new THREE.Group(); p.position.set(x, y, z);
+    p.add(mesh(new THREE.CylinderGeometry(r, r * .85, len, 6), mat, 0, -len / 2, 0));
+    parent.add(p); legs.push(p);
+  }
+  return legs;
+}
+
+const BUILD = {
+  fox() {
+    const g = new THREE.Group(), root = new THREE.Group(); g.add(root);
+    const o = M(0xe57a2e), w = M(0xfff4e6), d = M(0x3a2a22);
+    const body = sph(.13, o, 0, .17, 0); body.scale.set(.95, .85, 1.55); root.add(body);
+    root.add(sph(.08, w, 0, .14, .13));
+    const head = new THREE.Group(); head.position.set(0, .28, .2); root.add(head);
+    const hd = sph(.1, o, 0, 0, 0); hd.scale.set(1.05, .95, 1); head.add(hd);
+    const sn = mesh(new THREE.ConeGeometry(.05, .13, 8), w, 0, -.025, .1); sn.rotation.x = Math.PI / 2; head.add(sn);
+    head.add(sph(.017, d, 0, -.025, .17, 6, 5));
+    for (const s of [-1, 1]) {
+      const e = mesh(new THREE.ConeGeometry(.042, .11, 6), o, s * .055, .09, -.01); e.rotation.z = -s * .25; head.add(e);
+      head.add(sph(.014, d, s * .042, .02, .085, 6, 5));
+    }
+    const tail = new THREE.Group(); tail.position.set(0, .2, -.18); root.add(tail);
+    const t1 = sph(.07, o, 0, .02, -.12); t1.scale.set(1, 1, 2.3); t1.rotation.x = -.5; tail.add(t1);
+    tail.add(sph(.05, w, 0, .1, -.27, 8, 6));
+    const legs = legSet(root, d, [[.06, .12, .1], [-.06, .12, .1], [.06, .12, -.1], [-.06, .12, -.1]], .12);
+    return { g, root, head, tail, legs, bh: .5 };
+  },
+  sheep() {
+    const g = new THREE.Group(), root = new THREE.Group(); g.add(root);
+    const wool = M(0xf8f5ef, { roughness: 1 }), face = M(0x3b3434);
+    for (const [x, y, z, r] of [[0, .22, 0, .13], [.08, .2, .07, .1], [-.08, .2, .07, .1], [.08, .2, -.07, .1], [-.08, .2, -.07, .1], [0, .28, -.05, .1], [0, .28, .06, .1], [0, .2, -.13, .09]])
+      root.add(sph(r, wool, x, y, z, 10, 8));
+    const head = new THREE.Group(); head.position.set(0, .25, .17); root.add(head);
+    const f = sph(.07, face, 0, 0, .02); f.scale.set(.85, 1, 1.2); head.add(f);
+    head.add(sph(.055, wool, 0, .055, -.005, 8, 6));
+    for (const s of [-1, 1]) {
+      const e = sph(.03, face, s * .07, .015, 0, 6, 5); e.scale.set(1.5, .5, .8); head.add(e);
+      head.add(sph(.012, M(0xffffff), s * .03, .015, .085, 6, 5));
+    }
+    const legs = legSet(root, face, [[.065, .12, .08], [-.065, .12, .08], [.065, .12, -.08], [-.065, .12, -.08]], .12, .018);
+    return { g, root, head, legs, bh: .48 };
+  },
+  rabbit() {
+    const g = new THREE.Group(), root = new THREE.Group(); g.add(root);
+    const fur = M(0xf1e6dc, { roughness: .95 }), pink = M(0xf4b3c0), d = M(0x2b2430);
+    const body = sph(.1, fur, 0, .11, -.01); body.scale.set(.95, .9, 1.2); root.add(body);
+    root.add(sph(.045, M(0xffffff, { roughness: 1 }), 0, .12, -.13, 8, 6));
+    const head = new THREE.Group(); head.position.set(0, .2, .09); root.add(head);
+    head.add(sph(.075, fur));
+    for (const s of [-1, 1]) {
+      const ear = new THREE.Group(); ear.position.set(s * .03, .05, -.01); ear.rotation.z = -s * .15; head.add(ear);
+      const e = sph(.03, fur, 0, .08, 0, 8, 6); e.scale.set(.7, 2.8, .45); ear.add(e);
+      const ei = sph(.02, pink, 0, .08, .01, 8, 6); ei.scale.set(.6, 2.6, .3); ear.add(ei);
+      head.add(sph(.012, d, s * .035, .01, .065, 6, 5));
+    }
+    head.add(sph(.012, pink, 0, -.012, .074, 6, 5));
+    const legs = legSet(root, fur, [[.05, .05, .07], [-.05, .05, .07], [.06, .06, -.06], [-.06, .06, -.06]], .05, .025);
+    return { g, root, head, legs, bh: .38 };
+  },
+  snake() {
+    const g = new THREE.Group(), root = new THREE.Group(); g.add(root);
+    const sk = M(0xdcb54a, { roughness: .5 }), d = M(0x221a14);
+    const head = new THREE.Group(); head.position.y = .05; root.add(head);
+    const h = sph(.055, sk); h.scale.set(1, .7, 1.4); head.add(h);
+    for (const s of [-1, 1]) head.add(sph(.011, d, s * .03, .02, .05, 6, 5));
+    const tongue = mesh(new THREE.BoxGeometry(.008, .003, .06), M(0xd8344a), 0, -.005, .09); head.add(tongue);
+    const segs = [], mats = [sk, M(0x9c7a2c, { roughness: .5 })];
+    for (let i = 0; i < 16; i++) {
+      const r = .05 * (1 - i / 19);
+      const m = sph(r, mats[i % 3 === 2 ? 1 : 0], 0, 0, 0, 10, 8); m.castShadow = true; m.userData.r = r; segs.push(m);
+    }
+    return { g, root, head, tongue, segs, bh: .3 };
+  },
+  bird() {
+    const g = new THREE.Group(), root = new THREE.Group(); g.add(root);
+    const c = pick([0x6fb7e9, 0xf2a65a, 0xe96f8a, 0x9a86e8]);
+    const bm = M(c, { roughness: .6 }), belly = M(0xfff2df), beak = M(0xf6c445);
+    const b = sph(.065, bm, 0, 0, 0); b.scale.set(.9, .85, 1.45); root.add(b);
+    const be = sph(.05, belly, 0, -.02, .025); be.scale.set(.85, .75, 1.2); root.add(be);
+    const head = new THREE.Group(); head.position.set(0, .05, .08); root.add(head);
+    head.add(sph(.048, bm));
+    const bk = mesh(new THREE.ConeGeometry(.016, .045, 6), beak, 0, -.005, .058); bk.rotation.x = Math.PI / 2; head.add(bk);
+    for (const s of [-1, 1]) head.add(sph(.009, M(0x1d1d28), s * .028, .012, .036, 6, 5));
+    const tail = mesh(new THREE.BoxGeometry(.05, .01, .07), bm, 0, .02, -.11); tail.rotation.x = .3; root.add(tail);
+    const wings = [];
+    for (const s of [-1, 1]) {
+      const p = new THREE.Group(); p.position.set(s * .045, .015, 0);
+      const w = sph(.055, bm, s * .05, 0, 0, 10, 6); w.scale.set(1.25, .18, .75); p.add(w);
+      root.add(p); wings.push(p);
+    }
+    return { g, root, head, wings, bh: .2 };
+  },
+  butterfly() {
+    const g = new THREE.Group(), root = new THREE.Group(); g.add(root);
+    const col = pick([0xffb3d9, 0x9fd8ff, 0xffe27a, 0xc7a6ff, 0xffffff]);
+    const wm = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: .25, side: THREE.DoubleSide, roughness: .6 });
+    const bodyM = M(0x2a2233);
+    const bd = mesh(new THREE.CylinderGeometry(.008, .008, .07, 6), bodyM); bd.rotation.x = Math.PI / 2; root.add(bd);
+    const wings = [];
+    for (const s of [-1, 1]) {
+      const p = new THREE.Group(); root.add(p);
+      const up = mesh(new THREE.CircleGeometry(.045, 14), wm, s * .04, 0, .015); up.rotation.x = -Math.PI / 2; up.scale.set(1, 1.15, 1); p.add(up);
+      const lo = mesh(new THREE.CircleGeometry(.032, 12), wm, s * .03, 0, -.03); lo.rotation.x = -Math.PI / 2; p.add(lo);
+      wings.push(p);
+    }
+    for (const s of [-1, 1]) { const an = mesh(new THREE.CylinderGeometry(.002, .002, .04, 3), bodyM, s * .01, .01, .05); an.rotation.x = 1; an.rotation.z = s * .3; root.add(an); }
+    return { g, root, wings, bh: .15 };
+  }
+};
+const KIND = { fox: 'ground', sheep: 'ground', rabbit: 'ground', snake: 'ground', bird: 'bird', butterfly: 'fly' };
+const SPEED = { fox: .42, sheep: .22, rabbit: .34, snake: .17, bird: 1.05, butterfly: .42 };
+const MAX_CREATURES = 60;
+
+const creatures = [];
+let cidSeq = 1;
+const T1 = new THREE.Vector3(), T2 = new THREE.Vector3(), T3 = new THREE.Vector3(), _mx = new THREE.Matrix4(), _xa = new THREE.Vector3();
+const arc = (a, b) => Math.acos(clamp(a.dot(b), -1, 1)) * R;
+function ortho(c) { c.fwd.addScaledVector(c.dir, -c.fwd.dot(c.dir)); if (c.fwd.lengthSq() < 1e-8) c.fwd.set(1, 0, 0).addScaledVector(c.dir, -c.dir.x); c.fwd.normalize(); }
+function moveOn(c, dist) {
+  const ax = T1.crossVectors(c.dir, c.fwd); if (ax.lengthSq() < 1e-10) return; ax.normalize();
+  const ang = dist / (R + c.alt * .6);
+  c.dir.applyAxisAngle(ax, ang).normalize(); c.fwd.applyAxisAngle(ax, ang); ortho(c);
+}
+function turn(c, a) { c.fwd.applyAxisAngle(c.dir, a); ortho(c); }
+function steer(c, target, rate, dt, away = false) {
+  const tg = T2.copy(target).addScaledVector(c.dir, -target.dot(c.dir));
+  if (tg.lengthSq() < 1e-9) return 0;
+  tg.normalize(); if (away) tg.negate();
+  const ang = Math.acos(clamp(c.fwd.dot(tg), -1, 1)) * (T3.crossVectors(c.fwd, tg).dot(c.dir) >= 0 ? 1 : -1);
+  turn(c, clamp(ang, -rate * dt, rate * dt));
+  return Math.abs(ang);
+}
+function avoid(c, dt, margin = .22) {
+  for (const o of OBST) {
+    const d = arc(c.dir, o.dir);
+    if (d < o.r + margin) {
+      steer(c, o.dir, 6, dt, true);
+      if (d < o.r) { const ax = T1.crossVectors(o.dir, c.dir); if (ax.lengthSq() > 1e-10) { ax.normalize(); c.dir.applyAxisAngle(ax, (o.r - d) / R * .5).normalize(); ortho(c); } }
+    }
+  }
+}
+function place(c) {
+  const h = heightAt(c.dir) + c.alt + c.hop;
+  c.g.position.copy(c.dir).multiplyScalar(h);
+  _xa.crossVectors(c.dir, c.fwd).normalize();
+  _mx.makeBasis(_xa, c.dir, c.fwd);
+  c.g.quaternion.setFromRotationMatrix(_mx);
+}
+
+function addCreature(type, dir, silent) {
+  if (!BUILD[type] || creatures.length >= MAX_CREATURES) return null;
+  const p = BUILD[type]();
+  const kind = KIND[type];
+  const d = dir ? dir.clone().normalize() : randomFreeDir(true);
+  const c = {
+    id: cidSeq++, type, kind, ...p, dir: d, fwd: new THREE.Vector3(), mode: kind === 'bird' ? 'fly' : 'wander',
+    timer: rand(2, 6), cd: rand(2, 5), hop: 0, alt: kind === 'bird' ? 1.1 : kind === 'fly' ? .3 : 0, altT: 1.1,
+    phase: Math.random() * 10, speed: SPEED[type] * rand(.85, 1.15), legPh: 0, moving: 0, spawn: 0,
+    hunger: rand(6, 14), princeT: rand(10, 30), seekT: 0
+  };
+  c.fwd.copy(randUnit()); ortho(c);
+  c.g.traverse(m => { m.userData.cid = c.id; if (m.isMesh) m.castShadow = true; });
+  c.g.scale.setScalar(.001);
+  planet.add(c.g);
+  if (type === 'snake') {
+    c.trail = [];
+    const back = { dir: d.clone(), fwd: c.fwd.clone().negate(), alt: 0 };
+    for (let i = 0; i < 60; i++) { c.trail.push(back.dir.clone()); moveOn(back, .025); }
+    for (const s of c.segs) { s.userData.cid = c.id; planet.add(s); }
+  }
+  creatures.push(c);
+  place(c);
+  if (!silent) bubble(c.g, '✨', c.bh, .22);
+  updateCount(); if (!silent) save();
+  return c;
+}
+function removeCreature(c) {
+  const i = creatures.indexOf(c); if (i < 0) return;
+  creatures.splice(i, 1);
+  planet.remove(c.g);
+  if (c.segs) for (const s of c.segs) planet.remove(s);
+  if (c.target && c.target.s) c.target.s.targeted = null;
+  for (const o of creatures) { if (o.partner === c) { o.partner = null; o.mode = o.kind === 'bird' ? 'fly' : 'wander'; } if (o.threat === c) o.threat = null; }
+  c.g.traverse(m => { if (m.isMesh) m.geometry.dispose(); });
+  updateCount(); save();
+}
+const free = c => c.mode === 'wander' || c.mode === 'idle';
+function releaseTarget(c) { if (c.target && c.target.s) c.target.s.targeted = null; c.target = null; }
+function endSocial(c) { c.mode = 'wander'; c.cd = rand(7, 14); c.timer = rand(3, 6); c.partner = null; turn(c, rand(2, 4) * (Math.random() < .5 ? 1 : -1)); }
+function startGreet(a, b) {
+  let e;
+  if (a.type === b.type) e = a.type === 'snake' ? '〰️' : '💕';
+  else e = ({ 'fox,rabbit': '❓', 'fox,sheep': '✨', 'fox,snake': '❓', 'rabbit,sheep': '🌼', 'rabbit,snake': '❗' })[[a.type, b.type].sort().join()] || '👋';
+  for (const [x, y] of [[a, b], [b, a]]) { x.mode = 'greet'; x.partner = y; x.timer = 2.2; }
+  bubble(a.g, e, a.bh); setTimeout(() => creatures.includes(b) && bubble(b.g, e, b.bh), 350);
+}
+function nearestSprout(c) {
+  let best = null, bd = 4.5;
+  for (const s of sprouts) if (s.alive && !s.targeted && s.scale > .6) { const d = arc(c.dir, s.dir); if (d < bd) { bd = d; best = s; } }
+  return best;
+}
+
+/* ---------- 地面居民 ---------- */
+function updGround(c, dt, t) {
+  c.timer -= dt; c.cd -= dt; c.hunger -= dt; c.princeT -= dt;
+  let spd = 0, look = 0, pose = 'stand';
+  const sp = c.speed;
+  switch (c.mode) {
+    case 'wander':
+      spd = sp;
+      turn(c, (Math.sin(t * .7 + c.phase) * .9 + Math.sin(t * 1.9 + c.phase * 3) * .5 + (c.type === 'snake' ? Math.sin(t * 4.5 + c.phase) * 2.4 : 0)) * dt);
+      if (c.type === 'rabbit') { c.hopClock = (c.hopClock || 0) + dt * 3.2; c.hop = Math.abs(Math.sin(c.hopClock)) * .07; spd = sp * (.4 + Math.abs(Math.sin(c.hopClock))); }
+      if ((c.type === 'sheep' || c.type === 'rabbit') && c.hunger < 0) {
+        const s = nearestSprout(c);
+        if (s) { c.mode = 'seek'; c.target = { kind: 'sprout', s }; s.targeted = c; c.seekT = 0; break; }
+        c.hunger = rand(5, 10);
+      }
+      if ((c.type === 'fox' || c.type === 'snake') && c.princeT < 0) { c.mode = 'seek'; c.target = { kind: 'prince' }; c.seekT = 0; break; }
+      if (c.timer < 0) {
+        const r = Math.random();
+        if (r < .16 && c.type !== 'snake') { c.mode = 'sleep'; c.timer = rand(5, 9); c.zz = .5; }
+        else if (r < .5) { c.mode = 'idle'; c.timer = rand(1.2, 3.5); }
+        else c.timer = rand(3, 7);
+      }
+      break;
+    case 'idle':
+      look = Math.sin(t * 1.3 + c.phase) * .7;
+      if (c.timer < 0) { c.mode = 'wander'; c.timer = rand(3, 7); }
+      break;
+    case 'sleep':
+      pose = 'sleep'; c.zz -= dt;
+      if (c.zz < 0) { bubble(c.g, '💤', c.bh * .8, .2); c.zz = 2.2; }
+      if (c.timer < 0) { c.mode = 'wander'; c.timer = rand(3, 6); }
+      break;
+    case 'greet':
+      steer(c, c.partner ? c.partner.dir : UP, 5, dt);   // 沒有對象時是在回應星球旅人
+      c.hop = c.timer > .7 ? Math.abs(Math.sin(c.timer * 8)) * .06 : 0;
+      if (c.timer < 0) endSocial(c);
+      break;
+    case 'play':
+      turn(c, 4 * dt); c.hop = Math.abs(Math.sin(c.timer * 7)) * .12;
+      if (c.timer < 0) { c.mode = 'wander'; c.hop = 0; c.timer = rand(2, 5); }
+      break;
+    case 'flee':
+      spd = sp * 2.6;
+      if (c.threat) steer(c, c.threat.dir, 7, dt, true);
+      if (c.timer < 0) { c.mode = 'wander'; c.timer = rand(2, 4); c.threat = null; }
+      break;
+    case 'seek': {
+      const k = c.target && c.target.kind;
+      if (!k || (k === 'sprout' && !c.target.s.alive)) { releaseTarget(c); c.mode = 'wander'; c.hunger = rand(6, 12); break; }
+      const tg = k === 'prince' ? UP : c.target.s.dir;
+      spd = sp * 1.15; steer(c, tg, 3.5, dt);
+      if (c.type === 'rabbit') { c.hopClock = (c.hopClock || 0) + dt * 3.6; c.hop = Math.abs(Math.sin(c.hopClock)) * .07; }
+      const d = arc(c.dir, tg);
+      c.seekT += dt;
+      if (k === 'prince' && d < .54) {
+        c.mode = 'sit'; c.timer = c.sitDur = rand(5, 8); c.target = null; c.petted = false;
+        if (c.type === 'snake') { bubble(c.g, '…', c.bh); princeReact('❓', false); c.petted = true; }
+        else { bubble(c.g, REPLY[c.type], c.bh); princeReact('😊'); }
+      } else if (k === 'sprout' && d < .17) { c.mode = 'eat'; c.timer = 3; bubble(c.g, '😋', c.bh); }
+      else if (c.seekT > 25) { releaseTarget(c); c.mode = 'wander'; c.princeT = rand(20, 40); c.hunger = rand(8, 14); }
+      break;
+    }
+    case 'sit':
+      pose = 'sit'; steer(c, UP, 4, dt);
+      if (arc(c.dir, UP) > .62) spd = sp * .5;
+      if (c.timer < 0) { c.mode = 'wander'; c.timer = rand(3, 6); c.princeT = rand(30, 60); turn(c, Math.PI); }
+      break;
+    case 'eat': {
+      const s = c.target && c.target.s; pose = 'eat';
+      if (s) { s.scale = Math.max(0, s.scale - dt / 3); steer(c, s.dir, 3, dt); }
+      if (c.timer < 0) {
+        if (s) { eatSprout(s); if (Math.random() < .5) princeReact('👍', false); }
+        c.target = null; c.mode = 'wander'; c.hunger = rand(14, 28); c.timer = rand(3, 6);
+      }
+      break;
+    }
+  }
+  if (c.mode !== 'greet' && c.mode !== 'play' && c.type !== 'rabbit') c.hop = Math.max(0, c.hop - dt * .4);
+  if (c.type === 'rabbit' && spd === 0 && c.mode !== 'greet' && c.mode !== 'play') c.hop = Math.max(0, c.hop - dt * .4);
+  if (spd > 0) { avoid(c, dt); moveOn(c, spd * dt); }
+  c.moving = spd;
+  place(c);
+
+  // 姿勢與動畫
+  const k = 1 - Math.exp(-dt * 8);
+  c.legPh += spd * dt * 30;
+  if (c.legs) c.legs.forEach((l, i) => { l.rotation.x += ((spd > 0 ? Math.sin(c.legPh + (i === 0 || i === 3 ? 0 : Math.PI)) * .7 : 0) - l.rotation.x) * k; });
+  const sleepK = pose === 'sleep' ? 1 : 0;
+  c.root.scale.y += ((1 - sleepK * .22) - c.root.scale.y) * k;
+  c.root.position.y += ((pose === 'sleep' ? -.03 : 0) - c.root.position.y) * k;
+  if (c.head) {
+    c.head.rotation.y += (look - c.head.rotation.y) * k;
+    const pitch = pose === 'eat' ? .5 + Math.sin(t * 10) * .15 : pose === 'sleep' ? .35 : pose === 'sit' ? -.25 : 0;
+    c.head.rotation.x += (pitch - c.head.rotation.x) * k;
+  }
+  if (c.type === 'fox') {
+    c.root.rotation.x += ((pose === 'sit' ? -.32 : 0) - c.root.rotation.x) * k;
+    c.tail.rotation.y = Math.sin(t * (pose === 'sit' || c.mode === 'greet' ? 9 : 3) + c.phase) * .45;
+  }
+  if (c.type === 'snake') updSnakeBody(c, t);
+}
+function updSnakeBody(c, t) {
+  if (arc(c.dir, c.trail[0]) > .025) { c.trail.unshift(c.dir.clone()); if (c.trail.length > 60) c.trail.pop(); }
+  c.segs.forEach((s, i) => {
+    const d = c.trail[Math.min(c.trail.length - 1, (i + 1) * 2)];
+    s.position.copy(d).multiplyScalar(heightAt(d) + s.userData.r * .85);
+  });
+  c.tongue.visible = Math.sin(t * 6 + c.phase) > .6;
+}
+
+/* ---------- 小鳥 ---------- */
+const birdOnPrince = () => creatures.some(b => b.type === 'bird' && b.land && b.land.perch === 'prince' && (b.mode === 'land' || b.mode === 'ground'));
+function takeoff(c) { c.mode = 'fly'; c.timer = rand(8, 16); c.land = null; c.hop = 0; }
+function updBird(c, dt, t) {
+  c.timer -= dt; c.cd -= dt;
+  let spd = 0;
+  if (c.mode === 'fly') {
+    spd = c.speed;
+    turn(c, (Math.sin(t * .5 + c.phase) * .7 + Math.sin(t * 1.3 + c.phase * 2) * .45) * dt);
+    c.altT = 1.05 + Math.sin(t * .4 + c.phase) * .25;
+    if (c.timer < 0) {
+      c.land = (Math.random() < .3 && !birdOnPrince()) ? { dir: UP.clone(), alt: PRINCE_H, perch: 'prince' } : { dir: randomFreeDir(false), alt: 0, perch: 'ground' };
+      c.mode = 'land'; c.seekT = 0;
+    }
+  } else if (c.mode === 'land') {
+    const d = arc(c.dir, c.land.dir);
+    spd = c.speed * clamp(d / 1.2, .3, 1); steer(c, c.land.dir, 4, dt);
+    c.altT = c.land.alt + Math.min(1.1, d * .9);
+    c.seekT += dt;
+    if (c.seekT > 20) takeoff(c);
+    else if (d < .06) {
+      c.mode = 'ground'; c.timer = rand(4, 8);
+      if (c.land.perch === 'prince') { c.dir.copy(UP); ortho(c); princeReact('😊', false); }
+    }
+  } else if (c.mode === 'ground') {
+    c.altT = c.land.alt;
+    if (c.land.perch === 'ground') {
+      c.hopT = (c.hopT || 0) - dt;
+      if (c.hopT < 0) { c.hopT = rand(.5, 1.2); c.hopMove = .2; turn(c, rand(-1.5, 1.5)); }
+      if (c.hopMove > 0) { spd = .3; c.hopMove -= dt; c.hop = Math.sin(clamp(1 - c.hopMove / .2, 0, 1) * Math.PI) * .04; } else c.hop = 0;
+    } else { c.dir.copy(UP); turn(c, Math.sin(t * .8 + c.phase) * dt * .6); }
+    if (Math.random() < dt * .22) bubble(c.g, '♪', c.bh, .18);
+    if (c.timer < 0) takeoff(c);
+  }
+  c.alt += (c.altT - c.alt) * (1 - Math.exp(-dt * (c.mode === 'ground' ? 8 : 2)));
+  if (spd > 0) moveOn(c, spd * dt);
+  place(c);
+  const flying = c.mode !== 'ground';
+  const f = flying ? Math.sin(t * 22 + c.phase) * .9 : .05;
+  c.wings[0].rotation.z = -f; c.wings[1].rotation.z = f;
+  c.head.rotation.x = !flying && c.land && c.land.perch === 'ground' && Math.sin(t * 3 + c.phase) > .7 ? .6 : 0;
+  c.root.rotation.z = flying ? Math.sin(t * .5 + c.phase) * .25 : 0;
+}
+
+/* ---------- 蝴蝶 ---------- */
+function butterflyTarget() {
+  const r = Math.random();
+  if (r < .3) return { dir: ROSE_DIR, alt: .5 };
+  if (r < .45) return { dir: UP, alt: PRINCE_H + .1 };
+  const alive = sprouts.filter(s => s.alive);
+  if (r < .6 && alive.length) { const s = pick(alive); return { dir: s.dir, alt: .15 }; }
+  return { dir: pick(FLOWER_DIRS), alt: .05 };
+}
+function updButterfly(c, dt, t) {
+  c.timer -= dt; c.cd -= dt; c.swirl = Math.max(0, (c.swirl || 0) - dt);
+  if (!c.tgt || c.timer < 0) { c.tgt = butterflyTarget(); c.timer = rand(8, 16); }
+  const d = arc(c.dir, c.tgt.dir);
+  steer(c, c.tgt.dir, d > .4 ? 2.5 : .8, dt);
+  turn(c, (Math.sin(t * 2.3 + c.phase) * 1.6 + Math.sin(t * 5.1 + c.phase) * 1 + c.swirl * 6) * dt);
+  c.altT = c.tgt.alt + .14 + Math.sin(t * 2.7 + c.phase) * .08 + (d > .5 ? .25 : 0);
+  c.alt += (c.altT - c.alt) * (1 - Math.exp(-dt * 3));
+  moveOn(c, c.speed * (d < .3 ? .55 : 1) * dt);
+  place(c);
+  const f = .25 + Math.sin(t * 20 + c.phase) * 1.0;
+  c.wings[0].rotation.z = -f; c.wings[1].rotation.z = f;
+}
+
+/* ---------- 互動 ---------- */
+function interactions(dt) {
+  const n = creatures.length;
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+    const a = creatures[i], b = creatures[j];
+    const d = arc(a.dir, b.dir);
+    if (d > 1.5) continue;
+    const ga = a.kind === 'ground', gb = b.kind === 'ground';
+    if (ga && gb) {
+      if (d < .2) { steer(a, b.dir, 3, dt, true); steer(b, a.dir, 3, dt, true); }
+      const sn = a.type === 'snake' ? a : b.type === 'snake' ? b : null, other = sn === a ? b : a;
+      if (sn && other.type !== 'snake' && other.type !== 'fox' && d < .75 && other.mode !== 'flee' && other.mode !== 'sleep' && other.mode !== 'sit') {
+        releaseTarget(other); other.mode = 'flee'; other.threat = sn; other.timer = 2.2; bubble(other.g, '❗', other.bh); continue;
+      }
+      if (d < .5 && a.cd <= 0 && b.cd <= 0 && free(a) && free(b)) startGreet(a, b);
+    } else if (ga !== gb) {
+      const g = ga ? a : b, f = ga ? b : a;
+      if (f.kind === 'bird' && f.mode === 'ground' && f.land && f.land.perch === 'ground' && d < .42 && g.moving > 0) { takeoff(f); bubble(f.g, '❗', f.bh, .18); }
+      if (f.kind === 'fly' && (g.type === 'fox' || g.type === 'rabbit') && d < .35 && f.alt < .5 && g.cd <= 0 && free(g)) {
+        g.mode = 'play'; g.timer = 1.8; g.cd = rand(8, 14); bubble(g.g, '✨', g.bh);
+      }
+    } else {
+      if (a.type === b.type && d < .5 && a.cd <= 0 && b.cd <= 0) {
+        bubble(a.g, a.type === 'bird' ? '♪' : '✨', a.bh, .2); a.cd = b.cd = rand(8, 15);
+        if (a.kind === 'fly') a.swirl = b.swirl = 1.5;
+      }
+      if (a.kind === 'bird' && b.kind === 'bird' && a.mode === 'fly' && b.mode === 'fly') {
+        if (d < .35) { steer(a, b.dir, 1.5, dt, true); steer(b, a.dir, 1.5, dt, true); }
+        else if (d < 1.4) { steer(a, b.dir, .35, dt); steer(b, a.dir, .35, dt); }
+      }
+    }
+  }
+}
+
+/* ---------- 星球旅人動畫 ---------- */
+const _camL = new THREE.Vector3();
+function angLerp(a, b, k) { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return a + d * k; }
+/* 星球旅人的互動：打招呼、呼喚居民、摸摸頭、澆玫瑰、趕走靠近玫瑰的綿羊、看星星 */
+const PRINCE_HI = { fox: '💛', sheep: '🌱', rabbit: '🥕', snake: '🌙', bird: '♪', butterfly: '✨' };
+const REPLY = { fox: '💛', sheep: '💕', rabbit: '💕', snake: '…', bird: '♪', butterfly: '✨' };
+Object.assign(prince, { pose: '', poseT: 0, focus: null, actT: rand(6, 10), cd: 0, roseGlow: 0 });
+function princeDo(pose, dur, focus = null) { prince.pose = pose; prince.poseT = dur; prince.focus = focus; }
+const princeSay = (e, delay = 0) => delay ? setTimeout(() => bubble(prince.g, e, 1.12, .3), delay) : bubble(prince.g, e, 1.12, .3);
+const sayTo = (c, e, delay = 0) => setTimeout(() => creatures.includes(c) && bubble(c.g, e, c.bh), delay);
+function princeBrain(dt) {
+  prince.cd -= dt; prince.actT -= dt; prince.poseT -= dt;
+  if (prince.poseT <= 0 && prince.pose) { prince.pose = ''; prince.focus = null; }
+  if (prince.focus && prince.focus !== 'rose' && !creatures.includes(prince.focus)) prince.focus = null;
+  const busy = prince.pose !== '';
+  for (const c of creatures) {
+    c.pcd = (c.pcd ?? rand(3, 8)) - dt;
+    const d = arc(c.dir, UP);
+    // 坐到身邊的居民 → 摸摸頭
+    if (c.mode === 'sit' && !c.petted && c.timer < c.sitDur - 1.3) {
+      c.petted = true; princeDo('pet', 2.4, c); princeSay('💕'); sayTo(c, REPLY[c.type], 500); continue;
+    }
+    // 綿羊靠近玫瑰 → 星球旅人緊張地把牠趕走
+    if (c.type === 'sheep' && arc(c.dir, ROSE_DIR) < .6 && c.mode !== 'flee' && prince.cd <= 0) {
+      prince.cd = 4; princeDo('wave', 1.8, c); princeSay('❗');
+      releaseTarget(c); c.mode = 'flee'; c.threat = { dir: ROSE_DIR }; c.timer = 2.4; sayTo(c, '💦', 300); continue;
+    }
+    if (busy) continue;
+    // 蝴蝶飛過來 → 伸手去碰
+    if (c.kind === 'fly' && d < .6 && c.pcd <= 0) { c.pcd = rand(10, 18); princeDo('reach', 2.2, c); princeSay('✨'); c.swirl = 1.6; return; }
+    // 地面居民經過 → 揮手打招呼，對方轉身回應
+    if (c.kind === 'ground' && d > .45 && d < 1.05 && c.pcd <= 0 && free(c)) {
+      c.pcd = rand(14, 26); princeDo('wave', 2, c); princeSay(PRINCE_HI[c.type]);
+      c.mode = 'greet'; c.partner = null; c.timer = 1.9; sayTo(c, REPLY[c.type], 500); return;
+    }
+  }
+  if (prince.actT < 0 && !busy) {
+    prince.actT = rand(9, 18);
+    const r = Math.random();
+    const far = creatures.filter(c => c.kind === 'ground' && free(c) && arc(c.dir, UP) > 1.1);
+    if (r < .45 && far.length) {          // 呼喚遠處的居民過來
+      const c = pick(far); princeDo('wave', 2.2, c); princeSay('👋');
+      c.mode = 'seek'; c.target = { kind: 'prince' }; c.seekT = 0; sayTo(c, '❗', 600);
+    } else if (r < .72) {                 // 幫玫瑰澆水
+      princeDo('water', 4.2, 'rose'); princeSay('💧'); princeSay('🌹', 2000); prince.roseGlow = 3.5;
+    } else {                              // 抬頭看星星
+      princeDo('stars', 4.5); princeSay('⭐');
+    }
+  }
+}
+function updPrince(dt, t) {
+  princeBrain(dt);
+  planet.updateMatrixWorld();
+  _camL.copy(camera.position); planet.worldToLocal(_camL);
+  let target = Math.atan2(_camL.x, _camL.z) - .25;
+  const f = prince.focus;
+  const birdOnHead = creatures.some(b => b.kind === 'bird' && b.mode === 'ground' && b.land && b.land.perch === 'prince');
+  if (f === 'rose') target = Math.atan2(ROSE_DIR.x, ROSE_DIR.z);
+  else if (f && arc(f.dir, UP) > .05) target = Math.atan2(f.dir.x, f.dir.z);
+  else {
+    let near = null, nd = 1.3;
+    for (const c of creatures) { if (c.kind === 'bird' && c.mode === 'ground' && c.land && c.land.perch === 'prince') continue; const d = arc(c.dir, UP); if (d < nd && d > .05 && c.alt < 1) { nd = d; near = c; } }
+    if (near) target = Math.atan2(near.dir.x, near.dir.z);
+  }
+  prince.yaw = angLerp(prince.yaw, target, 1 - Math.exp(-dt * 2.2));
+  prince.g.rotation.y = prince.yaw;
+  prince.body.scale.y = 1 + Math.sin(t * 2) * .012;
+  prince.head.rotation.z = Math.sin(t * .7) * .06;
+  prince.scarf.forEach((s, i) => {
+    s.rotation.y = Math.sin(t * 2.6 - i * .7) * .32 + .28;
+    s.rotation.x = Math.sin(t * 3.7 - i * .9) * .22 - .1 + (i === 0 ? .25 : 0);
+  });
+  const p = prince.pose, k = 1 - Math.exp(-dt * 7);
+  const [armL, armR] = prince.arms;
+  const rz = p === 'wave' ? 2.5 + Math.sin(t * 12) * .35 : p === 'reach' ? 2.8 + Math.sin(t * 3) * .1 : p === 'pet' ? .3 : .14;
+  const rx = p === 'pet' ? -1.15 + Math.sin(t * 8) * .12 : p === 'reach' ? -.35 : 0;
+  armR.rotation.z += (rz - armR.rotation.z) * k; armR.rotation.x += (rx - armR.rotation.x) * k;
+  armL.rotation.x += ((p === 'water' ? -1.05 + Math.sin(t * 2.5) * .08 : 0) - armL.rotation.x) * k;
+  prince.body.rotation.x += ((p === 'pet' ? .24 : p === 'water' ? .12 : 0) - prince.body.rotation.x) * k;
+  const hx = p === 'stars' ? -.45 : birdOnHead ? -.3 : p === 'pet' ? .2 : 0;
+  prince.head.rotation.x += (hx - prince.head.rotation.x) * k;
+  prince.roseGlow = Math.max(0, prince.roseGlow - dt);
+  roseBloom.scale.setScalar(1 + Math.sin(Math.min(prince.roseGlow, 3.5) / 3.5 * Math.PI) * .25);
+}
+
+/* ---------- 火山 / 路燈 / 樹苗 / 玫瑰 ---------- */
+function updDecor(dt, t) {
+  for (const v of volcanoes) {
+    if (!v.active) continue;
+    v.mouthMat.emissiveIntensity = 1.4 + Math.sin(t * 2 + v.ph) * .5 + Math.sin(t * 7.3 + v.ph) * .2;
+    for (const s of v.smoke) {
+      s.userData.p = (s.userData.p + dt / 3.4) % 1; const p = s.userData.p;
+      s.position.set(Math.sin(p * 3 + v.ph) * .08 * p, .42 + p * .95, Math.cos(p * 2.3 + v.ph) * .06 * p);
+      s.scale.setScalar(.1 + p * .42); s.material.opacity = Math.sin(p * Math.PI) * .5;
+    }
+  }
+  lamp.t -= dt;
+  if (lamp.t < 0) { lamp.on = !lamp.on; lamp.t = lamp.on ? rand(14, 24) : rand(5, 9); }
+  lamp.level += ((lamp.on ? 1 : 0) - lamp.level) * (1 - Math.exp(-dt * 3));
+  const flick = lamp.on ? 1 + Math.sin(t * 23) * .03 : 1;
+  lamp.glassMat.emissiveIntensity = .15 + lamp.level * 2.3 * flick;
+  lamp.light.intensity = lamp.level * 3 * flick;
+  roseBloom.rotation.z = Math.sin(t * 1.1) * .05;
+  for (const s of sprouts) {
+    if (s.alive) {
+      if (!(s.targeted && s.targeted.mode === 'eat')) s.scale = Math.min(1, s.scale + dt / 4);
+      s.g.scale.setScalar(Math.max(.001, s.scale));
+      s.leaves.forEach((l, i) => l.rotation.x = Math.sin(t * 2 + i) * .15);
+    } else {
+      s.respawn -= dt;
+      if (s.respawn < 0) { s.dir = randomFreeDir(false); placeOn(s.g, s.dir, rand(0, 6), 0); s.alive = true; s.scale = 0; s.g.visible = true; }
+    }
+  }
+}
+
+/* ================= 流星 ================= */
+const meteorGeo = new THREE.PlaneGeometry(1, 1); meteorGeo.translate(-.5, 0, 0);
+const meteorShader = {
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+  fragmentShader: `uniform float uOpacity; varying vec2 vUv;
+    void main(){ float a = pow(vUv.x, 2.4); float w = 1. - abs(vUv.y-.5)*2.; w = pow(max(w,0.), mix(5., 1.2, vUv.x));
+      vec3 c = mix(vec3(.45,.65,1.), vec3(1.,.97,.9), vUv.x); gl_FragColor = vec4(c, a*w*uOpacity); }`
+};
+const meteors = [];
+let meteorRate = 1, meteorClock = rand(2, 5), showerLeft = 0, showerClock = 0;
+function spawnMeteor() {
+  const z = rand(-75, -35), dist = CAM_Z - z;
+  const hh = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * dist, hw = hh * camera.aspect;
+  const ang = Math.PI + rand(.32, .72);
+  const dir = new THREE.Vector3(Math.cos(ang), Math.sin(ang), 0);
+  const m = new THREE.Mesh(meteorGeo, new THREE.ShaderMaterial({ ...meteorShader, uniforms: { uOpacity: { value: 0 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  m.position.set(rand(-hw * .3, hw * 1.15), rand(hh * .25, hh * 1.05), z);
+  m.rotation.z = ang;
+  const head = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, color: 0xfff6e0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
+  head.scale.setScalar(dist * .02);
+  scene.add(m, head);
+  meteors.push({ m, head, dir, speed: rand(.5, .85) * dist, len: rand(.08, .16) * dist, w: dist * .0032, age: 0, life: rand(.9, 1.7) });
+}
+function updMeteors(dt) {
+  meteorClock -= dt * meteorRate;
+  if (meteorClock < 0) { meteorClock = rand(3, 10); if (Math.random() < .07) showerLeft = Math.floor(rand(5, 9)); else spawnMeteor(); }
+  if (showerLeft > 0) { showerClock -= dt; if (showerClock < 0) { spawnMeteor(); showerLeft--; showerClock = rand(.15, .6); } }
+  for (let i = meteors.length - 1; i >= 0; i--) {
+    const o = meteors[i]; o.age += dt;
+    const k = o.age / o.life;
+    const op = Math.min(1, o.age / .15) * (1 - smooth(.6, 1, k));
+    o.m.position.addScaledVector(o.dir, o.speed * dt);
+    o.m.scale.set(o.len * Math.min(1, o.age / .25), o.w, 1);
+    o.m.material.uniforms.uOpacity.value = op;
+    o.head.position.copy(o.m.position); o.head.material.opacity = op * .9;
+    if (o.age > o.life) { scene.remove(o.m, o.head); o.m.material.dispose(); o.head.material.dispose(); meteors.splice(i, 1); }
+  }
+}
+
+/* ================= 版面 / 視差 ================= */
+const mouse = { x: 0, y: 0, sx: 0, sy: 0 };
+function layout() {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  const hh = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z, hw = hh * camera.aspect;
+  const px = camera.aspect > 1 ? Math.max(0, hw - R * 1.8) : 0;
+  planetPivot.position.set(px, -.35, 0);
+  sun.position.set(px - 8, 7.5, 9);
+  rimLight.position.set(px + 7, 3, -8);
+  // 依螢幕比例擺放遠方星球（fx, fy 為 -1~1 的畫面位置），避開正中間的月曆與右側的星球旅人星球
+  const at = (o, fx, fy, z) => { const h = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * (CAM_Z - z); o.position.set(fx * h * camera.aspect, fy * h, z); };
+  at(ringPlanet, -.6, .52, -48);
+  at(moon, .3, -.8, -38);
+  at(gasGiant, -.86, -.78, -70);
+  at(icePlanet, .14, .82, -55);
+  at(greenPlanet, -.42, -.74, -45);
+}
+addEventListener('resize', layout);
+layout();
+
+/* ================= UI ================= */
+const ui = document.getElementById('ui'), panel = document.getElementById('panel'), countEl = document.getElementById('count');
+let rotSpeed = .07, idleT = 0;
+function updateCount() { countEl.textContent = creatures.length; }
+document.getElementById('toggle').onclick = () => { panel.hidden = !panel.hidden; save(); };
+panel.querySelectorAll('[data-add]').forEach(b => b.onclick = () => addCreature(b.dataset.add));
+document.getElementById('undo').onclick = () => creatures.length && removeCreature(creatures[creatures.length - 1]);
+document.getElementById('clear').onclick = () => { while (creatures.length) removeCreature(creatures[0]); };
+document.getElementById('shower').onclick = () => { showerLeft = 12; showerClock = 0; };
+const spdEl = document.getElementById('spd'), metEl = document.getElementById('met');
+spdEl.oninput = () => { rotSpeed = spdEl.value / 100 * .2; save(); };
+metEl.oninput = () => { meteorRate = metEl.value / 50; save(); };
+addEventListener('pointermove', e => {
+  mouse.x = e.clientX / innerWidth * 2 - 1; mouse.y = e.clientY / innerHeight * 2 - 1;
+  idleT = 0; ui.classList.remove('dim');
+});
+
+/* 點擊居民 / 星球旅人 */
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+renderer.domElement.addEventListener('pointerdown', e => {
+  ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObject(planet, true).find(h => h.object.isMesh);
+  if (!hit) return;
+  let o = hit.object;
+  while (o && o !== planet) { if (o === prince.g) { princeReact(pick(['😊', '👋', '🌹', '⭐'])); return; } o = o.parent; }
+  const cid = hit.object.userData.cid;
+  const c = cid && creatures.find(x => x.id === cid);
+  if (!c) return;
+  if (c.kind === 'bird') { if (c.mode !== 'fly') takeoff(c); bubble(c.g, '♪', c.bh, .2); }
+  else if (c.kind === 'fly') { c.swirl = 2; bubble(c.g, '✨', c.bh, .2); }
+  else { releaseTarget(c); c.mode = 'play'; c.timer = 1.6; bubble(c.g, c.type === 'snake' ? '…' : '💕', c.bh); }
+});
+
+/* Lively Wallpaper 自訂屬性 */
+const livelyCal = { date: '', time: '', title: '', color: 0 };
+const LIVELY_COLORS = ['#a8432f', '#7c9a6d', '#d9a441', '#4f6d8f', '#a07cb0'];
+function onLivelyProp(name, val) {
+  if (name === 'calDate') livelyCal.date = String(val || '').trim();
+  else if (name === 'calTime') livelyCal.time = String(val || '').trim();
+  else if (name === 'calTitle') livelyCal.title = String(val || '');
+  else if (name === 'calColor') livelyCal.color = Number(val) || 0;
+  else if (name === 'calAdd') calAdd(livelyCal.date || ymd(new Date()), livelyCal.time, livelyCal.title, LIVELY_COLORS[livelyCal.color]);
+  else if (name === 'calPrev') calShift(-1);
+  else if (name === 'calNext') calShift(1);
+  else if (name === 'calNow') calGoToday();
+  else if (name === 'showCalendar') document.getElementById('cal').style.display = val ? '' : 'none';
+  else if (name === 'rotSpeed') { rotSpeed = val / 100 * .2; spdEl.value = val; }
+  else if (name === 'meteorRate') { meteorRate = val / 50; metEl.value = val; }
+  else if (name === 'showPanel') ui.style.display = val ? '' : 'none';
+  else if (name === 'meteorShower') { showerLeft = 12; showerClock = 0; }
+  else if (name === 'clearAll') { while (creatures.length) removeCreature(creatures[0]); }
+  else if (name.startsWith('add_')) addCreature(name.slice(4));
+}
+
+/* 存檔（瀏覽器本機儲存） */
+const KEY = 'planet-wallpaper-planet-v1';
+function save() {
+  if (MIRROR) return;          // 只有主桌布負責存檔
+  try {
+    localStorage.setItem(KEY, JSON.stringify({
+      list: creatures.map(c => ({ t: c.type, d: c.dir.toArray().map(v => +v.toFixed(3)) })),
+      spd: +spdEl.value, met: +metEl.value, open: !panel.hidden
+    }));
+  } catch (e) { /* 無法儲存時照常運作 */ }
+}
+function load() {
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { s = null; }
+  if (s && Array.isArray(s.list)) {
+    spdEl.value = s.spd ?? 35; metEl.value = s.met ?? 50; panel.hidden = !s.open;
+    rotSpeed = spdEl.value / 100 * .2; meteorRate = metEl.value / 50;
+    for (const c of s.list) if (BUILD[c.t]) addCreature(c.t, new THREE.Vector3().fromArray(c.d), true);
+  } else {
+    for (const t of ['fox', 'sheep', 'sheep', 'rabbit', 'snake', 'bird', 'bird', 'butterfly', 'butterfly']) addCreature(t, null, true);
+  }
+  updateCount();
+}
+/* 第一次開啟時的預設資料（建置時放入先前備份的居民與行事曆）；之後都存在 Lively 的瀏覽器儲存 */
+const SEED = /*SEED_DATA*/null;
+if (SEED) {
+  for (const k of ['planet-wallpaper-planet-v1', 'planet-wallpaper-calendar']) {
+    try { if (typeof SEED[k] === 'string' && localStorage.getItem(k) === null) localStorage.setItem(k, SEED[k]); } catch (e) { /* 無法儲存時照常運作 */ }
+  }
+}
+addEventListener('pagehide', () => save());
+
+/* 「星球居民管理」視窗透過 localStorage 傳指令過來（桌布本身不接收滑鼠點擊） */
+const CMD_KEY = 'planet-wallpaper-cmds';
+function runCmd(c) {
+  if (c.a === 'add') addCreature(c.t);
+  else if (c.a === 'undo') creatures.length && removeCreature(creatures[creatures.length - 1]);
+  else if (c.a === 'clear') while (creatures.length) removeCreature(creatures[0]);
+  else if (c.a === 'shower') { showerLeft = 12; showerClock = 0; try { localStorage.setItem('planet-wallpaper-shower', String(Date.now())); } catch (e) { /* 忽略 */ } }
+  else if (c.a === 'spd') { spdEl.value = c.v; rotSpeed = c.v / 100 * .2; }
+  else if (c.a === 'met') { metEl.value = c.v; meteorRate = c.v / 50; }
+  save();
+}
+function displayMode() {
+  let m = 'primary';
+  try { m = JSON.parse(localStorage.getItem(DISPLAY_KEY) || '"primary"'); } catch (e) { m = 'primary'; }
+  return ['primary', 'secondary', 'all'].includes(m) ? m : 'primary';
+}
+/* 複本：跟著主桌布的居民清單、速度與流星雨同步 */
+let mirrorSig = null, mirrorShower = null;
+function mirrorSync() {
+  let s = null, sh = null;
+  try { s = JSON.parse(localStorage.getItem(KEY) || 'null'); sh = localStorage.getItem('planet-wallpaper-shower'); } catch (e) { s = null; }
+  if (mirrorShower !== null && sh !== mirrorShower && Date.now() - Number(sh) < 5000) { showerLeft = 12; showerClock = 0; }
+  mirrorShower = sh;
+  if (!s || !Array.isArray(s.list)) return;
+  if (s.spd != null) rotSpeed = s.spd / 100 * .2;
+  if (s.met != null) meteorRate = s.met / 50;
+  const now = s.list.filter(c => BUILD[c.t]), sig = now.map(c => c.t).join(',');
+  if (mirrorSig === null) { mirrorSig = sig; return; }
+  if (sig === mirrorSig) return;
+  const cur = creatures.map(c => c.type).join(',');
+  if (sig.startsWith(cur)) now.slice(creatures.length).forEach(c => addCreature(c.t, new THREE.Vector3().fromArray(c.d)));
+  else if (cur.startsWith(sig)) while (creatures.length > now.length) removeCreature(creatures[creatures.length - 1]);
+  else { while (creatures.length) removeCreature(creatures[0]); now.forEach(c => addCreature(c.t, new THREE.Vector3().fromArray(c.d), true)); }
+  mirrorSig = sig;
+}
+function pollCmds() {
+  if (MIRROR) { mirrorSync(); return; }
+  if (WALL) document.title = 'PlanetWallpaper|main|' + displayMode();   // 安裝程式從標題讀取顯示設定
+  let q = [];
+  try { q = JSON.parse(localStorage.getItem(CMD_KEY) || '[]'); if (q.length) localStorage.setItem(CMD_KEY, '[]'); } catch (e) { q = []; }
+  q.forEach(runCmd);
+  try { localStorage.setItem('planet-wallpaper-beat', JSON.stringify({ t: Date.now(), n: creatures.length })); } catch (e) { /* 忽略 */ }
+}
+setInterval(pollCmds, 400);
+
+/* ================= 桌面月曆 =================
+   資料存在 localStorage「planet-wallpaper-calendar」：
+   { events:[{id,date:'YYYY-MM-DD',time:'HH:MM'|'' ,title,color}], view:{mode:'auto'|'fixed', y, m} }
+   由「星球居民管理」視窗編輯，這裡偵測到變動就重畫。 */
+const CAL_KEY = 'planet-wallpaper-calendar';
+const MONTH_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+let calRaw = undefined, calToday = '';
+function renderCal(force) {
+  let raw = null;
+  try { raw = localStorage.getItem(CAL_KEY); } catch (e) { raw = null; }
+  const now = new Date(), today = ymd(now);
+  if (!force && raw === calRaw && today === calToday) return;
+  calRaw = raw; calToday = today;
+  let cal = {};
+  try { cal = JSON.parse(raw || '{}') || {}; } catch (e) { cal = {}; }
+  const events = Array.isArray(cal.events) ? cal.events : [];
+  let y = now.getFullYear(), m = now.getMonth();
+  const v = cal.view;
+  if (v && v.mode === 'fixed' && Number.isInteger(v.y) && Number.isInteger(v.m)) { y = v.y; m = v.m; }
+  const byDate = new Map();
+  for (const e of events) {
+    if (!e || typeof e.date !== 'string') continue;
+    if (!byDate.has(e.date)) byDate.set(e.date, []);
+    byDate.get(e.date).push(e);
+  }
+  for (const list of byDate.values()) list.sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
+  const first = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate();
+  const weeks = Math.ceil((first.getDay() + days) / 7);
+  const grid = document.getElementById('calGrid');
+  grid.style.gridTemplateRows = `repeat(${weeks},1fr)`;
+  grid.replaceChildren();
+  let monthCount = 0;
+  for (let i = 0; i < weeks * 7; i++) {
+    const d = new Date(y, m, 1 - first.getDay() + i), key = ymd(d);
+    const cell = document.createElement('div');
+    cell.className = 'cal-day' + (d.getMonth() !== m ? ' out' : '') + (key === today ? ' today' : '') +
+      (d.getDay() === 0 ? ' sun' : d.getDay() === 6 ? ' sat' : '');
+    const n = document.createElement('div'); n.className = 'cal-n'; n.textContent = d.getDate(); cell.append(n);
+    const list = byDate.get(key) || [];
+    if (d.getMonth() === m) monthCount += list.length;
+    const max = weeks > 5 ? 2 : 3;
+    list.slice(0, max).forEach(e => {
+      const ev = document.createElement('div'); ev.className = 'cal-ev';
+      ev.style.setProperty('--c', /^#[0-9a-f]{6}$/i.test(e.color || '') ? e.color : '#f5cf47');
+      ev.textContent = (e.time ? e.time + ' ' : '') + (e.title || '');
+      cell.append(ev);
+    });
+    if (list.length > max) { const mo = document.createElement('div'); mo.className = 'cal-more'; mo.textContent = `+${list.length - max} 個行程`; cell.append(mo); }
+    grid.append(cell);
+  }
+  document.getElementById('calM').textContent = `${m + 1}月`;
+  document.getElementById('calY').textContent = `${y} · ${MONTH_EN[m].toUpperCase()}`;
+  document.getElementById('calSub').textContent = monthCount ? `本月有 ${monthCount} 個行程` : '本月還沒有行程';
+}
+renderCal(true);
+setInterval(() => renderCal(false), 1000);
+addEventListener('storage', e => { if (e.key === CAL_KEY) renderCal(true); });
+
+/* ---------- 面板分頁：星球居民 / 行事曆 ---------- */
+panel.querySelectorAll('.tab').forEach(b => b.onclick = () => {
+  panel.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === b));
+  panel.querySelectorAll('[data-pane]').forEach(p => p.hidden = p.dataset.pane !== b.dataset.tab);
+});
+
+/* ---------- 行事曆編輯（面板與 Lively「自訂」共用） ---------- */
+const WD = ['日', '一', '二', '三', '四', '五', '六'];
+const parseYmd = s => { const [y, m, d] = String(s).split('-').map(Number); return new Date(y, m - 1, d); };
+const validYmd = s => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(parseYmd(s));
+function loadCal() {
+  let c = {};
+  try { c = JSON.parse(localStorage.getItem(CAL_KEY) || '{}') || {}; } catch (e) { c = {}; }
+  return { events: Array.isArray(c.events) ? c.events : [], view: c.view && c.view.mode === 'fixed' ? c.view : { mode: 'auto' } };
+}
+function saveCal(c) { try { localStorage.setItem(CAL_KEY, JSON.stringify(c)); } catch (e) { /* 忽略 */ } renderCal(true); renderCalEditor(); }
+function calViewYM(c) { const n = new Date(); return c.view.mode === 'fixed' ? [c.view.y, c.view.m] : [n.getFullYear(), n.getMonth()]; }
+function calShift(delta) {
+  const c = loadCal(), [y, m] = calViewYM(c), d = new Date(y, m + delta, 1);
+  c.view = { mode: 'fixed', y: d.getFullYear(), m: d.getMonth() }; saveCal(c);
+}
+function calGoToday() { const c = loadCal(); c.view = { mode: 'auto' }; saveCal(c); }
+function calAdd(date, time, title, color) {
+  title = String(title || '').trim().slice(0, 40);
+  if (!validYmd(date) || !title) return false;
+  if (!/^\d{2}:\d{2}$/.test(time || '')) time = '';
+  const c = loadCal();
+  c.events.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), date, time, title, color: /^#[0-9a-f]{6}$/i.test(color || '') ? color : '#a8432f' });
+  saveCal(c); return true;
+}
+function calDelete(id) { const c = loadCal(); c.events = c.events.filter(e => e.id !== id); saveCal(c); }
+
+let calColor = '#a8432f';
+const cEl = id => document.getElementById(id);
+cEl('cPrev').onclick = () => calShift(-1);
+cEl('cNext').onclick = () => calShift(1);
+cEl('cNow').onclick = () => calGoToday();
+cEl('cSw').querySelectorAll('.sw').forEach(b => b.onclick = () => { calColor = b.dataset.c; cEl('cSw').querySelectorAll('.sw').forEach(x => x.classList.toggle('on', x === b)); });
+function addFromPanel() {
+  if (calAdd(cEl('cDate').value, cEl('cTime').value, cEl('cTitle').value, calColor)) { cEl('cTitle').value = ''; cEl('cTime').value = ''; }
+  else cEl('cTitle').focus();
+}
+cEl('cAdd').onclick = addFromPanel;
+cEl('cTitle').addEventListener('keydown', e => { if (e.key === 'Enter') addFromPanel(); });
+cEl('cDate').value = ymd(new Date());
+function renderCalEditor() {
+  const c = loadCal(), [y, m] = calViewYM(c);
+  cEl('cName').textContent = `${y} 年 ${m + 1} 月`;
+  cEl('cMode').textContent = c.view.mode === 'fixed' ? '桌面固定顯示此月' : '桌面自動跟隨當月';
+  cEl('cMode').classList.toggle('fixed', c.view.mode === 'fixed');
+  const prefix = `${y}-${String(m + 1).padStart(2, '0')}-`;
+  const list = c.events.filter(e => typeof e.date === 'string' && e.date.startsWith(prefix))
+    .sort((a, b) => (a.date + (a.time || '99')).localeCompare(b.date + (b.time || '99')));
+  const box = cEl('cList'); box.replaceChildren();
+  if (!list.length) { const e = document.createElement('div'); e.className = 'cempty'; e.textContent = '這個月還沒有行程'; box.append(e); }
+  for (const e of list) {
+    const d = parseYmd(e.date);
+    const row = document.createElement('div'); row.className = 'cev'; row.style.setProperty('--c', e.color || '#a8432f');
+    const bar = document.createElement('span'); bar.className = 'bar';
+    const when = document.createElement('div'); when.className = 'when'; when.textContent = `${d.getMonth() + 1}/${d.getDate()}（${WD[d.getDay()]}）` + (e.time ? `\n${e.time}` : '');
+    const what = document.createElement('div'); what.className = 'what'; what.textContent = e.title;
+    const del = document.createElement('button'); del.className = 'del'; del.title = '刪除這個行程'; del.textContent = '✕';
+    del.onclick = () => calDelete(e.id);
+    row.append(bar, when, what, del); box.append(row);
+  }
+}
+renderCalEditor();
+addEventListener('storage', e => { if (e.key === CAL_KEY) renderCalEditor(); });
+// 標題讓安裝程式找到桌布視窗（主桌布 / 其他螢幕的複本）
+if (WALL) { ui.style.display = 'none'; document.title = MIRROR ? 'PlanetWallpaper|mirror|' + MIRROR : 'PlanetWallpaper|main|' + displayMode(); }
+
+scene.updateMatrixWorld(true);
+load();
+setInterval(save, 15000);
+addEventListener('beforeunload', save);
+
+/* ================= 主迴圈 ================= */
+let last = performance.now(), time = 0;
+const CLOSE = new URLSearchParams(location.search).has('close');   // 近拍檢視：index.html?close
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(.05, (now - last) / 1000); last = now; time += dt;
+  idleT += dt; if (idleT > 4 && !ui.matches(':hover')) ui.classList.add('dim');
+
+  planet.rotation.y += rotSpeed * dt;
+  for (const [o, s] of SPINNERS) o.rotation.y += dt * s;
+  updEnergy(dt, time);
+  stars.rotation.y += dt * .002;
+  sky.material.uniforms.uTime.value = time; starMat.uniforms.uTime.value = time;
+
+  mouse.sx += (mouse.x - mouse.sx) * (1 - Math.exp(-dt * 1.5));
+  mouse.sy += (mouse.y - mouse.sy) * (1 - Math.exp(-dt * 1.5));
+  if (CLOSE) {
+    const p = planetPivot.position;
+    camera.position.set(p.x - 2.2, 2.2, 9.5); camera.lookAt(p.x, .6, 0);
+  } else {
+    camera.position.set(mouse.sx * .7 + Math.sin(time * .05) * .3, -mouse.sy * .45 + Math.sin(time * .07) * .15, CAM_Z);
+    camera.lookAt(0, 0, 0);
+  }
+
+  for (const c of creatures) {
+    if (c.spawn < 1) { c.spawn = Math.min(1, c.spawn + dt / .6); const s = c.spawn, b = 1 + 2.2 * Math.pow(s - 1, 3) + 1.2 * Math.pow(s - 1, 2); c.g.scale.setScalar(Math.max(.001, b)); }
+    if (c.kind === 'ground') updGround(c, dt, time);
+    else if (c.kind === 'bird') updBird(c, dt, time);
+    else updButterfly(c, dt, time);
+  }
+  interactions(dt);
+  updPrince(dt, time);
+  updDecor(dt, time);
+  updMeteors(dt);
+  updateBubbles(dt);
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(frame);
+
+// 頁面準備好後才接手 Lively 的設定；先前送來的（排在 __lpq 裡）依序補做
+window.livelyPropertyListener = (n, v) => { try { onLivelyProp(n, v); } catch (e) { /* 忽略 */ } };
+for (const [n, v] of (window.__lpq || []).splice(0)) window.livelyPropertyListener(n, v);
+</script>
+<script>
+  // 若 three.js 未能載入（例如離線），顯示提示
+  setTimeout(() => { if (!document.querySelector('canvas')) document.getElementById('err').style.display = 'block'; }, 6000);
+</script>
+</body>
+</html>
