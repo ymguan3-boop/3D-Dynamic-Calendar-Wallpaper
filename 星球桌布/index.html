@@ -778,7 +778,7 @@ const FACE_OF = { '😊': 'happy', '👋': 'happy', '💛': 'happy', '🌱': 'ha
                   '💕': 'shy', '🌸': 'happy', '❗': 'wow', '❓': 'wow', '✨': 'star', '⭐': 'star', '💧': 'talk', '🌙': 'talk' };
 function showPrincessExpression(e) {
   if (!prince.model) return;
-  bubble(prince.expressionAnchor, e, .23, .34, .04);
+  bubble(prince.expressionAnchor, e, .145, .17, .04);
   prince.model.express(FACE_OF[e] || 'happy', 2.4);
 }
 function princeReact(e, wave = true) { if (wave) princeDo('wave', 2.4, null); showPrincessExpression(e); }
@@ -1484,9 +1484,24 @@ function pushData(beacon) {
 setInterval(() => pushData(false), 2000);
 addEventListener('pagehide', () => { save(); pushData(true); });
 
-/* 「星球居民管理」視窗透過 localStorage 傳指令過來 */
+/* 安裝版的管理視窗透過本機主程式傳指令，網頁預覽沿用 localStorage。 */
 const CMD_KEY = 'planet-wallpaper-cmds';
 function runCmd(c) {
+  if (!c) return;
+  if (['cal-add', 'cal-remove', 'cal-view'].includes(c.a)) {
+    const calendar = loadCal();
+    if (c.a === 'cal-add' && c.v && !calendar.events.some(event => event.id === c.v.id)) calendar.events.push(c.v);
+    if (c.a === 'cal-remove') calendar.events = calendar.events.filter(event => event.id !== c.v);
+    if (c.a === 'cal-view' && c.v) calendar.view = c.v;
+    saveCal(calendar);
+    pushData(false);
+    return;
+  }
+  if (c.a === 'display' && ['primary', 'secondary', 'all'].includes(c.v)) {
+    localStorage.setItem(DISPLAY_KEY, JSON.stringify(c.v));
+    pushData(false);
+    return;
+  }
   if (c.a === 'add') addCreature(c.t);
   else if (c.a === 'undo') creatures.length && removeCreature(creatures[creatures.length - 1]);
   else if (c.a === 'clear') while (creatures.length) removeCreature(creatures[0]);
@@ -1529,6 +1544,29 @@ function pollCmds() {
 }
 setInterval(pollCmds, 400);
 
+let managerAck = 0, syncingManager = false;
+const managerDecoder = new TextDecoder();
+async function syncManager() {
+  if (syncingManager) return;
+  syncingManager = true;
+  try {
+    const response = await fetch('/wallpaper-state?ack=' + managerAck, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Desktop-Input': desktopToken },
+      body: snapshot()
+    });
+    if (!response.ok) return;
+    for (const [id, payload] of await response.json()) {
+      if (id <= managerAck) continue;
+      try {
+        const bytes = Uint8Array.from(atob(payload), character => character.charCodeAt(0));
+        runCmd(JSON.parse(managerDecoder.decode(bytes)));
+      } catch (error) { console.warn('無法處理管理視窗指令', error); }
+      managerAck = id;
+    }
+  } catch (error) { /* 下一次輪詢會繼續同步 */ }
+  finally { syncingManager = false; }
+}
+
 /* ================= 桌面月曆 =================
    資料存在 localStorage「planet-wallpaper-calendar」：
    { events:[{id,date:'YYYY-MM-DD',time:'HH:MM'|'' ,title,color}], view:{mode:'auto'|'fixed', y, m} }
@@ -1541,6 +1579,15 @@ const calDetailsTitle = document.getElementById('calDetailsTitle');
 const calDetailsNav = document.getElementById('calDetailsNav');
 const calTriggers = new WeakMap();
 const desktopToken = WALL && HAS_SERVER ? PARAMS.get('desktopInput') : null;
+if (desktopToken && !MIRROR) {
+  const ackKey = 'planet-wallpaper-manager-ack-' + desktopToken;
+  try { managerAck = Number(sessionStorage.getItem(ackKey)) || 0; } catch {}
+  setInterval(() => {
+    syncManager().then(() => {
+      try { sessionStorage.setItem(ackKey, managerAck); } catch {}
+    });
+  }, 400);
+}
 const calEventColor = e => /^#[0-9a-f]{6}$/i.test(e.color || '') ? e.color : '#f5cf47';
 let detailTrigger = null, detailIndex = 0, detailPinned = false, hoveredTrigger = null;
 function closeCalDetails() {
@@ -1782,6 +1829,7 @@ if (WALL) {
 
 scene.updateMatrixWorld(true);
 load();
+save();
 setInterval(save, 15000);
 addEventListener('beforeunload', save);
 

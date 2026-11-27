@@ -9,6 +9,7 @@ param([string]$Action = 'start')
 
 $App          = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProfileDir   = Join-Path $App 'edge-profile'
+$ManagerProfileDir = Join-Path $App 'control-profile'
 $PidFile      = Join-Path $App 'watcher.pid'
 $LogFile      = Join-Path $App 'wallpaper-log.txt'
 $MainPrefix   = 'PlanetWallpaper|main'
@@ -207,6 +208,29 @@ public static class LPW {
 
   // ---- tiny static server on 127.0.0.1 for the wallpaper pages ----
   static System.Net.Sockets.TcpListener server; static string root;
+  static readonly object managerLock = new object();
+  static readonly Queue<KeyValuePair<int, string>> managerCommands = new Queue<KeyValuePair<int, string>>();
+  static int sentCommand, appliedCommand;
+  static readonly string managerSession = Guid.NewGuid().ToString("N");
+  static string managerState = "{}";
+  static DateTime managerUpdated;
+
+  static string ReadJsonBody(System.IO.Stream stream, byte[] buffer, int count, int headerEnd, string[] headers, int maxLength = 2000000) {
+    int length = 0;
+    foreach (string header in headers)
+      if (header.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase)) int.TryParse(header.Substring(15).Trim(), out length);
+    if (length <= 0 || length > maxLength) return null;
+    var data = new byte[length];
+    int have = Math.Min(count - headerEnd - 4, length);
+    Array.Copy(buffer, headerEnd + 4, data, 0, have);
+    while (have < length) {
+      int read = stream.Read(data, have, length - have);
+      if (read <= 0) return null;
+      have += read;
+    }
+    string json = Encoding.UTF8.GetString(data).Trim();
+    return json.StartsWith("{") && json.EndsWith("}") ? json : null;
+  }
   public static bool StartServer(string dir, int port) {
     root = dir;
     try { server = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, port); server.Start(); }
@@ -239,25 +263,61 @@ public static class LPW {
         if (path == "/") path = "/index.html";
         byte[] body; string type = "text/html; charset=utf-8"; int code = 200;
         string dataFile = System.IO.Path.Combine(root, "data.json");
+        string[] headers = head0.Split('\n');
         bool desktopRoute = path == "/desktop-pointer" || path == "/open-manager";
-        bool desktopInput = desktopRoute && Array.Exists(head0.Split('\n'),
+        bool bridgeRoute = path == "/wallpaper-state" || path == "/manager-state" || path == "/manager-command";
+        bool desktopInput = (desktopRoute || path == "/wallpaper-state") && Array.Exists(headers,
           h => h.Trim().Equals("X-Desktop-Input: " + InputToken, StringComparison.OrdinalIgnoreCase));
-        if (path == "/data" && method == "POST") {
-          int len = 0;
-          foreach (string h in head0.Split('\n'))
-            if (h.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase)) int.TryParse(h.Substring(15).Trim(), out len);
-          if (len <= 0 || len > 2000000) { body = Encoding.ASCII.GetBytes("bad length"); type = "text/plain"; code = 400; }
+        bool managerInput = bridgeRoute && Array.Exists(headers,
+          h => h.Trim().Equals("X-Planet-Manager: 1", StringComparison.OrdinalIgnoreCase)) && Array.Exists(headers,
+          h => h.Trim().Equals("Sec-Fetch-Site: same-origin", StringComparison.OrdinalIgnoreCase)) && Array.Exists(headers,
+          h => h.Trim().Equals("Host: " + server.LocalEndpoint, StringComparison.OrdinalIgnoreCase));
+        if (path == "/wallpaper-state" && method == "POST" && desktopInput) {
+          string json = ReadJsonBody(s, buf, n, headEnd, headers);
+          if (json == null) { body = Encoding.ASCII.GetBytes("bad state"); code = 400; }
           else {
-            var data = new byte[len]; int have = Math.Min(n - headEnd - 4, len);
-            Array.Copy(buf, headEnd + 4, data, 0, have);
-            while (have < len) { int r = s.Read(data, have, len - have); if (r <= 0) break; have += r; }
-            string json = Encoding.UTF8.GetString(data, 0, have).Trim();
-            if (have == len && json.StartsWith("{") && json.EndsWith("}")) {
+            int ack = 0;
+            const string prefix = "/wallpaper-state?ack=";
+            if (parts[1].StartsWith(prefix, StringComparison.Ordinal)) int.TryParse(parts[1].Substring(prefix.Length), out ack);
+            lock (managerLock) {
+              appliedCommand = Math.Max(appliedCommand, Math.Min(ack, sentCommand));
+              while (managerCommands.Count != 0 && managerCommands.Peek().Key <= appliedCommand) managerCommands.Dequeue();
+              managerState = json;
+              managerUpdated = DateTime.UtcNow;
+              var commands = new List<string>();
+              foreach (var command in managerCommands) commands.Add("[" + command.Key + ",\"" + command.Value + "\"]");
+              body = Encoding.UTF8.GetBytes("[" + String.Join(",", commands.ToArray()) + "]");
+            }
+            type = "application/json; charset=utf-8";
+          }
+        }
+        else if (path == "/manager-state" && method == "GET" && managerInput) {
+          lock (managerLock) {
+            string alive = DateTime.UtcNow - managerUpdated < TimeSpan.FromSeconds(4) ? "true" : "false";
+            body = Encoding.UTF8.GetBytes("{\"data\":" + managerState + ",\"alive\":" + alive +
+              ",\"ack\":" + appliedCommand + ",\"session\":\"" + managerSession + "\"}");
+          }
+          type = "application/json; charset=utf-8";
+        }
+        else if (path == "/manager-command" && method == "POST" && managerInput) {
+          string json = ReadJsonBody(s, buf, n, headEnd, headers, 16384);
+          lock (managerLock) {
+            if (json == null || managerCommands.Count >= 128 || DateTime.UtcNow - managerUpdated >= TimeSpan.FromSeconds(4)) {
+              body = Encoding.ASCII.GetBytes("command unavailable"); code = 400;
+            } else {
+              managerCommands.Enqueue(new KeyValuePair<int, string>(++sentCommand, Convert.ToBase64String(Encoding.UTF8.GetBytes(json))));
+              body = Encoding.ASCII.GetBytes(sentCommand.ToString());
+            }
+          }
+          type = "application/json; charset=utf-8";
+        }
+        else if (path == "/data" && method == "POST") {
+          string json = ReadJsonBody(s, buf, n, headEnd, headers);
+          if (json != null) {
               lock (root) { string tmp = dataFile + ".tmp"; System.IO.File.WriteAllText(tmp, json, new UTF8Encoding(false));
                 if (System.IO.File.Exists(dataFile)) System.IO.File.Replace(tmp, dataFile, null); else System.IO.File.Move(tmp, dataFile); }
               body = Encoding.ASCII.GetBytes("saved"); type = "text/plain";
-            } else { body = Encoding.ASCII.GetBytes("bad data"); type = "text/plain"; code = 400; }
-          }
+          } else { body = Encoding.ASCII.GetBytes("bad data"); type = "text/plain"; code = 400; }
         }
         else if (path == "/data") {
           string json; lock (root) { json = System.IO.File.Exists(dataFile) ? System.IO.File.ReadAllText(dataFile, Encoding.UTF8) : "{}"; }
@@ -275,7 +335,7 @@ public static class LPW {
         else if (path == "/ping") { body = Encoding.ASCII.GetBytes("ok"); type = "text/plain"; }
         else if (path == "/index.html" || path == "/control.html") body = System.IO.File.ReadAllBytes(System.IO.Path.Combine(root, path.Substring(1)));
         else { body = Encoding.ASCII.GetBytes("not found"); type = "text/plain"; code = 404; }
-        string cors = desktopRoute ? "" : "Access-Control-Allow-Origin: *\r\n";
+        string cors = desktopRoute || bridgeRoute ? "" : "Access-Control-Allow-Origin: *\r\n";
         string head = "HTTP/1.1 " + code + (code == 200 ? " OK" : code == 400 ? " Bad Request" : " Not Found") + "\r\nContent-Type: " + type +
           "\r\nContent-Length: " + body.Length + "\r\nCache-Control: no-store\r\n" + cors + "Connection: close\r\n\r\n";
         var hb = Encoding.ASCII.GetBytes(head);
@@ -295,9 +355,9 @@ function Get-EdgePath {
   return $null
 }
 
-function Start-Edge([string]$url) {
+function Start-Edge([string]$url, [string]$userDataDir = $ProfileDir) {
   $edgeArgs = @(
-    "--user-data-dir=`"$ProfileDir`"", "--app=`"$url`"",
+    "--user-data-dir=`"$userDataDir`"", "--app=`"$url`"",
     '--no-first-run', '--no-default-browser-check', '--hide-crash-restore-bubble', '--disable-session-crashed-bubble',
     '--disable-extensions', '--disable-sync', '--disable-translate',
     '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--disable-background-timer-throttling',
@@ -309,20 +369,20 @@ function Start-Edge([string]$url) {
   } catch { Log "edge launch failed: $($_.Exception.Message)" }
 }
 
-function Get-OurEdge {
+function Get-OurEdge([string]$userDataDir) {
   @(Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.CommandLine -and $_.CommandLine.Contains($ProfileDir) })
+    Where-Object { $_.CommandLine -and $_.CommandLine.Contains($userDataDir) })
 }
 # Close Edge gracefully first so it writes the page data to disk; force-kill only what is still running afterwards.
-function Stop-OurEdge {
-  $procs = Get-OurEdge
+function Stop-OurEdge([string]$userDataDir) {
+  $procs = Get-OurEdge $userDataDir
   if (-not $procs.Count) { return }
   $n = [LPW]::CloseWindowsOf([uint32[]]@($procs | ForEach-Object { [uint32]$_.ProcessId }))
-  for ($i = 0; $i -lt 40 -and (Get-OurEdge).Count; $i++) { Start-Sleep -Milliseconds 250 }
-  $left = Get-OurEdge
+  for ($i = 0; $i -lt 40 -and (Get-OurEdge $userDataDir).Count; $i++) { Start-Sleep -Milliseconds 250 }
+  $left = Get-OurEdge $userDataDir
   if ($left.Count) {
     Start-Sleep -Milliseconds 1500
-    $left = Get-OurEdge
+    $left = Get-OurEdge $userDataDir
     $left | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
   }
   Log "edge closed (windows asked: $n, force-killed: $($left.Count))"
@@ -403,21 +463,15 @@ function Set-Placement($h, $d, $mon) {
   }
 }
 
-function Set-WallpaperFullScreen($h) {
-  $caption = 0x00C00000
-  if (([LPW]::GetWindowLongPtr($h, -16).ToInt64() -band $caption) -eq 0) { return }
-  # F11 applies to just this wallpaper window. The shared Edge process stays windowed.
-  [void][LPW]::PostMessage($h, 0x100, [IntPtr]0x7A, [IntPtr]0x00570001)
-  [void][LPW]::PostMessage($h, 0x101, [IntPtr]0x7A, [IntPtr]0xC0570001)
-  for ($i = 0; $i -lt 60; $i++) {
-    if (([LPW]::GetWindowLongPtr($h, -16).ToInt64() -band $caption) -eq 0) { return }
-    Start-Sleep -Milliseconds 25
-  }
-  Log "full screen request timed out: $([LPW]::Title($h))"
-}
-
 function Connect-Window($h, $d, $mon) {
-  if ([LPW]::GetParent($h) -eq [IntPtr]::Zero) { Set-WallpaperFullScreen $h }
+  $caption = 0x00C00000
+  if ([LPW]::GetParent($h) -eq [IntPtr]::Zero -and ([LPW]::GetWindowLongPtr($h, -16).ToInt64() -band $caption)) {
+    [void][LPW]::PostMessage($h, 0x100, [IntPtr]0x7A, [IntPtr]0x00570001)
+    [void][LPW]::PostMessage($h, 0x101, [IntPtr]0x7A, [IntPtr]0xC0570001)
+    for ($i = 0; $i -lt 60 -and ([LPW]::GetWindowLongPtr($h, -16).ToInt64() -band $caption); $i++) {
+      Start-Sleep -Milliseconds 25
+    }
+  }
   $st = [LPW]::GetWindowLongPtr($h, -16).ToInt64() -band 0xFFFFFFFFL
   $remove = 0x00C00000L -bor 0x00040000L -bor 0x00080000L -bor 0x00020000L -bor 0x00010000L -bor 0x80000000L
   $st = ($st -band (-bnot $remove)) -bor 0x40000000L -bor 0x10000000L    # WS_CHILD | WS_VISIBLE, no frame
@@ -460,15 +514,14 @@ function Open-Manager {
     if ([LPW]::IsIconic($windows[0])) { [void][LPW]::ShowWindow($windows[0], 9) }
     [void][LPW]::SetForegroundWindow($windows[0])
   } else {
-    Start-Edge ([Uri](Join-Path $App 'open-control.html')).AbsoluteUri
+    Start-Edge ([Uri](Join-Path $App 'open-control.html')).AbsoluteUri $ManagerProfileDir
   }
 }
 
 # ---------- main + mirror wallpaper windows ----------
 $script:State = @{}
 function Open-Main {
-  # Restart the dedicated Edge process so its initial bounds apply to the manager as well.
-  Stop-OurEdge
+  Stop-OurEdge $ProfileDir
   Start-Edge ($BaseUrl + "index.html?wallpaper&desktopInput=$([LPW]::InputToken)")
   return (Wait-Edge $MainPrefix $false 30)
 }
@@ -515,9 +568,7 @@ function Sync-Windows {
   }
 }
 
-# Edge sometimes re-applies its full-screen layout to the wallpaper windows (for example while another
-# Edge window such as the control window is dragged between screens), which pushes them off their screen.
-# Checked every second: any wallpaper window that moved, resized, got hidden or lost its styles is put back.
+# Recover wallpaper windows that lose their desktop position or styles, for example after Explorer restarts.
 function Restore-Placement {
   $S = $script:S
   if (-not $S -or -not $S.Desk) { return }
@@ -552,7 +603,8 @@ function Start-Session($h) {
 
 switch ($Action) {
   'stop' {
-    Stop-Watcher; Stop-OurEdge; Start-Sleep -Milliseconds 500; Restore-Desktop; Log 'stopped'
+    Stop-Watcher; Stop-OurEdge $ManagerProfileDir; Stop-OurEdge $ProfileDir
+    Start-Sleep -Milliseconds 500; Restore-Desktop; Log 'stopped'
   }
   'control' {
     Open-Manager
