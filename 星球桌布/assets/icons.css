@@ -1,0 +1,29 @@
+[data-add="fox"], [data-art="fox"] { --art: url("fox.png"); }
+[data-add="sheep"] { --art: url("sheep.png"); }
+[data-add="snake"] { --art: url("snake.png"); }
+[data-add="bird"] { --art: url("bird.png"); }
+[data-add="butterfly"] { --art: url("butterfly.png"); }
+[data-add="rabbit"] { --art: url("rabbit.png"); }
+[data-art="calendar"] { --art: url("calendar.png"); }
+[data-art="planet"] { --art: url("planet.png"); }
+[data-art="meteor"] { --art: url("meteor.png"); }
+[data-art="remove"] { --art: url("remove.png"); }
+[data-art="manager"] { --art: url("manager.png"); }
+[data-art="display-primary"] { --art: url("display-primary.png"); }
+[data-art="display-secondary"] { --art: url("display-secondary.png"); }
+[data-art="display-all"] { --art: url("display-all.png"); }
+
+[data-art]::before, [data-add]::before {
+  content: "";
+  display: inline-block;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  vertical-align: middle;
+  background: var(--art) center / contain no-repeat;
+}
+[data-add]::before { width: 40px; height: 40px; }
+.opt[data-art]::before { width: 52px; height: 30px; }
+.del[data-art]::before { width: 22px; height: 22px; }
+.row button[data-art]::before, .tab[data-art]::before, .addbtn[data-art]::before,
+#eAdd[data-art]::before { margin-right: 4px; }

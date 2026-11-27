@@ -19,6 +19,11 @@ try {
   foreach ($f in 'index.html', 'control.html', 'open-control.html', 'lpw.ps1', 'uninstall.ps1') {
     Copy-Item (Join-Path $Src $f) (Join-Path $Dest $f) -Force
   }
+  $icons = Join-Path $Dest 'icons'
+  New-Item -ItemType Directory -Force $icons | Out-Null
+  foreach ($name in 'manager.ico', 'start.ico', 'stop.ico', 'remove.ico') {
+    Copy-Item -LiteralPath (Join-Path $Src "icons\$name") -Destination (Join-Path $icons $name) -Force
+  }
 
   # 啟動器：安裝時在本機編譯一個沒有視窗的小程式，直接以「不建立主控台」的方式執行 PowerShell。
   # 不依賴 VBScript，也不受「預設終端機」設定（Windows Terminal）影響。
@@ -67,17 +72,20 @@ public static class Program {
     '--disable-renderer-backgrounding --disable-background-timer-throttling ' +
     '--disable-features=CalculateNativeWinOcclusion,Translate,msEdgeStartupBoost'
 
-  $star = "$env:SystemRoot\System32\shell32.dll,43"
+  $managerIcon = (Join-Path $icons 'manager.ico') + ',0'
+  $startIcon = (Join-Path $icons 'start.ico') + ',0'
+  $stopIcon = (Join-Path $icons 'stop.ico') + ',0'
+  $removeIcon = (Join-Path $icons 'remove.ico') + ',0'
   $desktop = [Environment]::GetFolderPath('Desktop')
   $menu = Join-Path ([Environment]::GetFolderPath('Programs')) '星球桌布'
   Remove-Item $menu -Recurse -Force -ErrorAction SilentlyContinue
   New-Item -ItemType Directory -Force $menu | Out-Null
-  New-Shortcut (Join-Path $menu '啟動星球桌布.lnk') $launcher 'start' '把小公主的星球設為桌布' $star
-  New-Shortcut (Join-Path $menu '停止星球桌布.lnk') $launcher 'stop' '停止動態桌布，回到原本的桌布' "$env:SystemRoot\System32\shell32.dll,27"
-  New-Shortcut (Join-Path $menu "$ManagerName.lnk") $edge $edgeArgs '新增居民、管理行事曆、選擇顯示螢幕' $star
-  New-Shortcut (Join-Path $menu '解除安裝星球桌布.lnk') $launcher 'uninstall' '移除星球桌布' "$env:SystemRoot\System32\shell32.dll,31"
-  New-Shortcut (Join-Path $desktop "$ManagerName.lnk") $edge $edgeArgs '新增居民、管理行事曆、選擇顯示螢幕' $star
-  New-Shortcut (Join-Path ([Environment]::GetFolderPath('Startup')) '星球桌布.lnk') $launcher 'start' '開機時自動啟動星球桌布' $star
+  New-Shortcut (Join-Path $menu '啟動星球桌布.lnk') $launcher 'start' '把小公主的星球設為桌布' $startIcon
+  New-Shortcut (Join-Path $menu '停止星球桌布.lnk') $launcher 'stop' '停止動態桌布，回到原本的桌布' $stopIcon
+  New-Shortcut (Join-Path $menu "$ManagerName.lnk") $edge $edgeArgs '新增居民、管理行事曆、選擇顯示螢幕' $managerIcon
+  New-Shortcut (Join-Path $menu '解除安裝星球桌布.lnk') $launcher 'uninstall' '移除星球桌布' $removeIcon
+  New-Shortcut (Join-Path $desktop "$ManagerName.lnk") $edge $edgeArgs '新增居民、管理行事曆、選擇顯示螢幕' $managerIcon
+  New-Shortcut (Join-Path ([Environment]::GetFolderPath('Startup')) '星球桌布.lnk') $launcher 'start' '開機時自動啟動星球桌布' $startIcon
 
   Start-Process $launcher -ArgumentList 'start'
 

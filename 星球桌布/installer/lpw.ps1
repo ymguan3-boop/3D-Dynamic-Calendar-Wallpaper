@@ -32,6 +32,7 @@ public static class LPW {
   public delegate bool EnumProc(IntPtr h, IntPtr l);
   delegate bool MonProc(IntPtr m, IntPtr dc, ref RECT r, IntPtr d);
   [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+  [StructLayout(LayoutKind.Sequential)] struct POINT { public int X, Y; }
   [StructLayout(LayoutKind.Sequential)] struct MONITORINFO { public int cbSize; public RECT rcMonitor; public RECT rcWork; public uint dwFlags; }
   [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string c, string w);
@@ -50,6 +51,7 @@ public static class LPW {
   [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
   [DllImport("user32.dll")] public static extern bool SetLayeredWindowAttributes(IntPtr h, uint key, byte a, uint f);
@@ -59,6 +61,11 @@ public static class LPW {
   [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr h);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT p);
+  [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(POINT p);
+  [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr h, uint flags);
+  [DllImport("user32.dll")] static extern short GetAsyncKeyState(int key);
+  [DllImport("user32.dll")] static extern int GetSystemMetrics(int index);
 
   // PowerShell turns $null into "" for string arguments, so null titles are passed from here
   public static IntPtr FindCls(string c) { return FindWindow(c, null); }
@@ -126,13 +133,85 @@ public static class LPW {
     return w;
   }
 
-  // ---- tiny static server on 127.0.0.1 for the wallpaper pages (whitelisted files + /data) ----
+  // Explorer receives the real mouse events above the wallpaper. Observe desktop clicks
+  // without intercepting them or sending any synthetic input to other applications.
+  public static readonly string InputToken = Guid.NewGuid().ToString("N");
+  static readonly object inputLock = new object();
+  static readonly Dictionary<string, IntPtr> inputWindows = new Dictionary<string, IntPtr>();
+  static POINT? cursor, lastClick;
+  static int clickSerial;
+  static int managerRequested;
+
+  public static bool TakeManagerRequest() {
+    return System.Threading.Interlocked.Exchange(ref managerRequested, 0) == 1;
+  }
+
+  public static void SetInputWindow(string key, IntPtr window) {
+    lock (inputLock) {
+      if (window == IntPtr.Zero) inputWindows.Remove(key);
+      else inputWindows[key] = window;
+    }
+  }
+  public static void ClearInputWindows() {
+    lock (inputLock) { inputWindows.Clear(); }
+  }
+  static bool IsDesktopPoint(POINT point) {
+    IntPtr top = GetAncestor(WindowFromPoint(point), 2);
+    var name = new StringBuilder(64);
+    GetClassName(top, name, name.Capacity);
+    return name.ToString() == "Progman" ||
+      (name.ToString() == "WorkerW" && FindChild(top, "SHELLDLL_DefView") != IntPtr.Zero);
+  }
+  static void ObserveDesktopPointer() {
+    POINT? pressedAt = null;
+    bool wasDown = false;
+    while (true) {
+      int button = GetSystemMetrics(23) == 0 ? 1 : 2; // SM_SWAPBUTTON
+      bool down = (GetAsyncKeyState(button) & 0x8000) != 0;
+      POINT point;
+      bool onDesktop = GetCursorPos(out point) && IsDesktopPoint(point);
+      if (down && !wasDown) pressedAt = onDesktop ? (POINT?)point : null;
+      if (pressedAt.HasValue && (!onDesktop ||
+          Math.Abs(pressedAt.Value.X - point.X) > GetSystemMetrics(68) ||
+          Math.Abs(pressedAt.Value.Y - point.Y) > GetSystemMetrics(69))) pressedAt = null;
+      lock (inputLock) {
+        cursor = onDesktop ? (POINT?)point : null;
+        if (!down && wasDown && pressedAt.HasValue) {
+          lastClick = point;
+          clickSerial++;
+        }
+      }
+      if (!down) pressedAt = null;
+      wasDown = down;
+      System.Threading.Thread.Sleep(15);
+    }
+  }
+  // Fractional coordinates align the Win32 window with CSS pixels at any display scale.
+  static string PointerPosition(POINT? p, RECT r) {
+    if (!p.HasValue || p.Value.X < r.Left || p.Value.X >= r.Right ||
+        p.Value.Y < r.Top || p.Value.Y >= r.Bottom) return "null";
+    return String.Format(System.Globalization.CultureInfo.InvariantCulture, "[{0:R},{1:R}]",
+      (p.Value.X - r.Left) / (double)(r.Right - r.Left),
+      (p.Value.Y - r.Top) / (double)(r.Bottom - r.Top));
+  }
+  static string DesktopPointer(string key) {
+    lock (inputLock) {
+      IntPtr window;
+      RECT rect = new RECT();
+      if (inputWindows.TryGetValue(key, out window)) GetWindowRect(window, out rect);
+      return "{\"point\":" + PointerPosition(cursor, rect) + ",\"click\":" + PointerPosition(lastClick, rect) +
+        ",\"serial\":" + clickSerial + "}";
+    }
+  }
+
+  // ---- tiny static server on 127.0.0.1 for the wallpaper pages ----
   static System.Net.Sockets.TcpListener server; static string root;
   public static bool StartServer(string dir, int port) {
     root = dir;
     try { server = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, port); server.Start(); }
     catch { return false; }
     var t = new System.Threading.Thread(Accept); t.IsBackground = true; t.Start();
+    var input = new System.Threading.Thread(ObserveDesktopPointer); input.IsBackground = true; input.Start();
     return true;
   }
   static void Accept() {
@@ -159,6 +238,9 @@ public static class LPW {
         if (path == "/") path = "/index.html";
         byte[] body; string type = "text/html; charset=utf-8"; int code = 200;
         string dataFile = System.IO.Path.Combine(root, "data.json");
+        bool desktopRoute = path == "/desktop-pointer" || path == "/open-manager";
+        bool desktopInput = desktopRoute && Array.Exists(head0.Split('\n'),
+          h => h.Trim().Equals("X-Desktop-Input: " + InputToken, StringComparison.OrdinalIgnoreCase));
         if (path == "/data" && method == "POST") {
           int len = 0;
           foreach (string h in head0.Split('\n'))
@@ -180,11 +262,21 @@ public static class LPW {
           string json; lock (root) { json = System.IO.File.Exists(dataFile) ? System.IO.File.ReadAllText(dataFile, Encoding.UTF8) : "{}"; }
           body = Encoding.UTF8.GetBytes(json); type = "application/json; charset=utf-8";
         }
+        else if (path == "/desktop-pointer" && method == "GET" && desktopInput) {
+          string prefix = "/desktop-pointer?window=";
+          string key = parts[1].StartsWith(prefix, StringComparison.Ordinal) ? Uri.UnescapeDataString(parts[1].Substring(prefix.Length)) : "";
+          body = Encoding.UTF8.GetBytes(DesktopPointer(key)); type = "application/json; charset=utf-8";
+        }
+        else if (path == "/open-manager" && method == "POST" && desktopInput) {
+          System.Threading.Interlocked.Exchange(ref managerRequested, 1);
+          body = Encoding.ASCII.GetBytes("ok"); type = "text/plain";
+        }
         else if (path == "/ping") { body = Encoding.ASCII.GetBytes("ok"); type = "text/plain"; }
         else if (path == "/index.html" || path == "/control.html") body = System.IO.File.ReadAllBytes(System.IO.Path.Combine(root, path.Substring(1)));
         else { body = Encoding.ASCII.GetBytes("not found"); type = "text/plain"; code = 404; }
+        string cors = desktopRoute ? "" : "Access-Control-Allow-Origin: *\r\n";
         string head = "HTTP/1.1 " + code + (code == 200 ? " OK" : code == 400 ? " Bad Request" : " Not Found") + "\r\nContent-Type: " + type +
-          "\r\nContent-Length: " + body.Length + "\r\nCache-Control: no-store\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n";
+          "\r\nContent-Length: " + body.Length + "\r\nCache-Control: no-store\r\n" + cors + "Connection: close\r\n\r\n";
         var hb = Encoding.ASCII.GetBytes(head);
         s.Write(hb, 0, hb.Length); s.Write(body, 0, body.Length);
       }
@@ -213,7 +305,7 @@ function Start-Edge([string]$page, [string]$query, [string[]]$extra) {
   ) + $extra
   try {
     $p = Start-Process -FilePath (Get-EdgePath) -ArgumentList $edgeArgs -PassThru -ErrorAction Stop
-    Log "edge launched pid=$($p.Id) page=$page$query"
+    Log "edge launched pid=$($p.Id) page=$page"
   } catch { Log "edge launch failed: $($_.Exception.Message)" }
 }
 
@@ -331,6 +423,15 @@ function Stop-Watcher {
 
 # ---------- control window: Edge opens new windows full screen (inherited from the wallpaper) ----------
 $script:Fixed = @{}
+function Open-Manager {
+  $windows = [LPW]::FindEdge($ControlTitle, $true)
+  if ($windows.Count) {
+    if ([LPW]::IsIconic($windows[0])) { [void][LPW]::ShowWindow($windows[0], 9) }
+    [void][LPW]::SetForegroundWindow($windows[0])
+  } else {
+    Start-Edge 'control.html' '' @('--window-size=440,880')
+  }
+}
 function Repair-ControlWindows {
   foreach ($h in [LPW]::FindEdge($ControlTitle, $true)) {
     $k = $h.ToInt64()
@@ -360,7 +461,7 @@ function Open-Main {
   # Edge applies --start-fullscreen only when it starts fresh, so our other Edge windows are closed first
   Stop-OurEdge
   Start-Sleep -Milliseconds 800
-  Start-Edge 'index.html' '?wallpaper' @('--start-fullscreen')
+  Start-Edge 'index.html' "?wallpaper&desktopInput=$([LPW]::InputToken)" @('--start-fullscreen')
   return (Wait-Edge $MainPrefix $false 30)
 }
 function Get-Mode($h) {
@@ -385,6 +486,7 @@ function Sync-Windows {
     if (-not $want.ContainsKey($k) -or -not [LPW]::IsWindow($h)) {
       if ([LPW]::IsWindow($h)) { [void][LPW]::PostMessage($h, 0x10, [IntPtr]::Zero, [IntPtr]::Zero); Log "mirror closed $k" }
       $S.Mirrors.Remove($k)
+      [LPW]::SetInputWindow($k, [IntPtr]::Zero)
     }
   }
   foreach ($k in $want.Keys) {
@@ -392,10 +494,15 @@ function Sync-Windows {
     $title = $MirrorPrefix + $k
     $h = @([LPW]::FindEdge($title, $true))[0]
     if (-not $h) {
-      Start-Edge 'index.html' "?wallpaper&mirror=$k" @()
+      Start-Edge 'index.html' "?wallpaper&mirror=$k&desktopInput=$([LPW]::InputToken)" @()
       $h = Wait-Edge $title $true 20
     }
-    if ($h -and $h -ne [IntPtr]::Zero) { Start-Sleep -Milliseconds 600; Connect-Window $h $S.Desk $want[$k]; $S.Mirrors[$k] = $h; $S.MirrorMon[$k] = $want[$k] }
+    if ($h -and $h -ne [IntPtr]::Zero) {
+      Start-Sleep -Milliseconds 600
+      Connect-Window $h $S.Desk $want[$k]
+      $S.Mirrors[$k] = $h; $S.MirrorMon[$k] = $want[$k]
+      [LPW]::SetInputWindow($k, $h)
+    }
     else { Log "mirror window for $k not found" }
   }
 }
@@ -430,6 +537,8 @@ function Start-Session($h) {
   $script:S = @{ Main = $h; Desk = (Get-Desktop); MainKey = ''; Mirrors = @{}; MirrorMon = @{}; Mode = (Get-Mode $h); Screens = '' }
   $first = @(Get-Targets $script:S.Mode)[0]
   Connect-Window $h $script:S.Desk $first; $script:S.MainKey = $first.Key
+  [LPW]::ClearInputWindows()
+  [LPW]::SetInputWindow('main', $h)
   Sync-Windows
 }
 
@@ -438,7 +547,7 @@ switch ($Action) {
     Stop-Watcher; Stop-OurEdge; Start-Sleep -Milliseconds 500; Restore-Desktop; Log 'stopped'
   }
   'control' {
-    Start-Edge 'control.html' '' @('--window-size=440,880')
+    Open-Manager
   }
   default {
     if (-not (Get-EdgePath)) { Log 'Microsoft Edge not found'; exit 1 }
@@ -454,6 +563,7 @@ switch ($Action) {
     $tick = 0
     while ($true) {
       Start-Sleep -Seconds 1
+      if ([LPW]::TakeManagerRequest()) { Open-Manager }
       Repair-ControlWindows
       Restore-Placement
       if ((++$tick % 3) -ne 0) { continue }
@@ -473,6 +583,8 @@ switch ($Action) {
         Connect-Window $S.Main $S.Desk $first; $S.MainKey = $first.Key; $S.MainMon = $first
         foreach ($k in @($S.Mirrors.Keys)) { $m = $S.Mirrors[$k]; if ([LPW]::IsWindow($m)) { [void][LPW]::PostMessage($m, 0x10, [IntPtr]::Zero, [IntPtr]::Zero) } }
         $S.Mirrors = @{}; $S.MirrorMon = @{}
+        [LPW]::ClearInputWindows()
+        [LPW]::SetInputWindow('main', $S.Main)
       }
       $mode = Get-Mode $S.Main
       $screens = (@(Get-Monitors) | ForEach-Object Key) -join ','

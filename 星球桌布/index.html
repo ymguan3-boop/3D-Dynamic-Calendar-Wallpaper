@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="assets/manager.png">
+<link rel="stylesheet" href="assets/icons.css">
 <title>小公主的星球</title>
 <style>
   :root{
@@ -19,11 +21,13 @@
     transition:opacity .6s ease;user-select:none;z-index:5}
   #ui.dim{opacity:.16}
   #ui:hover{opacity:1}
+  .wallpaper #ui{opacity:1}
   #ui button{font:inherit;color:inherit;cursor:pointer;border:1px solid var(--ui-line);background:var(--ui-bg);
     backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-radius:999px;transition:background .2s,border-color .2s,transform .1s}
   #ui button:hover{background:rgba(40,42,80,.8);border-color:rgba(245,207,71,.5)}
   #ui button:active{transform:scale(.96)}
   #toggle{padding:8px 16px;font-size:14px;letter-spacing:.06em}
+  #toggle[data-art]{display:flex;align-items:center;gap:7px}
   #toggle b{display:inline-block;min-width:20px;margin-left:6px;padding:1px 7px;border-radius:999px;background:rgba(245,207,71,.18);color:var(--ui-accent);font-weight:600}
   #panel{width:290px;padding:16px;border-radius:18px;background:var(--ui-bg);border:1px solid var(--ui-line);
     backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 10px 40px rgba(0,0,0,.35)}
@@ -87,7 +91,7 @@
     color:rgba(253,243,223,.72);font-family:"Noto Serif TC","PMingLiU",Georgia,serif;text-shadow:0 1px 6px rgba(0,0,0,.6)}
   #ui{bottom:96px!important}
 
-  /* 桌面月曆（滑鼠穿透，只負責顯示） */
+  /* 桌面月曆（只有行程和詳情可互動） */
   #cal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:29vw;height:56vh;display:flex;flex-direction:column;gap:1.1vh;
     padding:2.2vh 1.5vw 1.8vh;border-radius:1.3vw;background:rgba(12,14,38,.34);border:1px solid rgba(255,240,200,.13);
     backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);box-shadow:0 1vh 4vh rgba(0,0,0,.25);
@@ -108,9 +112,21 @@
   .cal-day.today{background:rgba(245,207,71,.14);border-color:rgba(245,207,71,.55)}
   .cal-day.today .cal-n{color:var(--ui-accent);font-weight:700}
   .cal-n{font-size:clamp(10px,.78vw,16px);line-height:1.1}
+  .cal-trigger{flex:none;pointer-events:auto;cursor:pointer;border:0;background:none;color:inherit;font:inherit;text-align:left}
+  .cal-trigger:hover,.cal-trigger:focus-visible,.cal-trigger[aria-expanded="true"]{background:rgba(255,255,255,.16)}
   .cal-ev{font-size:clamp(8px,.56vw,12px);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
     padding:.1vh .25vw;border-radius:.3vw;background:rgba(255,255,255,.07);border-left:.18vw solid var(--c,#f5cf47)}
-  .cal-more{font-size:clamp(8px,.52vw,11px);color:var(--ui-dim)}
+  .cal-more{padding:0 .25vw;font-size:clamp(8px,.52vw,11px);color:var(--ui-dim)}
+  #calDetails{position:fixed;z-index:5;box-sizing:border-box;width:max-content;min-width:min(220px,calc(100vw - 16px));
+    max-width:min(360px,calc(100vw - 16px));padding:12px 14px;border:1px solid rgba(255,240,200,.28);
+    border-radius:12px;background:#191a30;color:var(--ui-text);box-shadow:0 8px 24px #0008;pointer-events:none}
+  #calDetails.pinned{pointer-events:auto}
+  #calDetailsWhen{font-size:12px;color:var(--ui-accent)}
+  #calDetailsTitle{margin-top:5px;padding-left:8px;border-left:3px solid var(--c);font-weight:700;font-size:15px;
+    white-space:pre-wrap;overflow-wrap:anywhere}
+  #calDetailsNav:not([hidden]){display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px}
+  #calDetailsNav button{font:inherit;color:inherit;background:#ffffff14;border:1px solid #ffffff30;border-radius:5px;padding:4px 8px;cursor:pointer}
+  #calDetailsNav button:disabled{opacity:.4;cursor:default}
   #err{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);color:#ccc;font-size:14px;display:none;text-align:center}
 </style>
 <script>
@@ -141,23 +157,32 @@
   <div class="cal-week"><div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div></div>
   <div class="cal-grid" id="calGrid"></div>
 </div>
+<div id="calDetails" aria-live="polite" hidden>
+  <div id="calDetailsWhen"></div>
+  <div id="calDetailsTitle"></div>
+  <div id="calDetailsNav" hidden>
+    <button type="button" data-cal-step="-1">上一筆</button>
+    <span id="calDetailsCount"></span>
+    <button type="button" data-cal-step="1">下一筆</button>
+  </div>
+</div>
 <div id="ui" class="dim">
   <div id="panel" hidden>
-    <div class="tabs"><button class="tab on" data-tab="res">❦ 星球居民</button><button class="tab" data-tab="cal">❦ 行事曆</button></div>
+    <div class="tabs"><button class="tab on" data-tab="res" data-art="planet">星球居民</button><button class="tab" data-tab="cal" data-art="calendar">行事曆</button></div>
     <div data-pane="res">
     <div class="ttl">新增星球居民</div>
     <div class="grid">
-      <button data-add="fox">🦊<span>狐狸</span></button>
-      <button data-add="sheep">🐑<span>綿羊</span></button>
-      <button data-add="snake">🐍<span>小蛇</span></button>
-      <button data-add="bird">🐦<span>小鳥</span></button>
-      <button data-add="butterfly">🦋<span>蝴蝶</span></button>
-      <button data-add="rabbit">🐇<span>兔子</span></button>
+      <button data-add="fox"><span>狐狸</span></button>
+      <button data-add="sheep"><span>綿羊</span></button>
+      <button data-add="snake"><span>小蛇</span></button>
+      <button data-add="bird"><span>小鳥</span></button>
+      <button data-add="butterfly"><span>蝴蝶</span></button>
+      <button data-add="rabbit"><span>兔子</span></button>
     </div>
     <div class="row">
-      <button id="shower">☄️ 流星雨</button>
-      <button id="undo">↶ 移除一隻</button>
-      <button id="clear">清空</button>
+      <button id="shower" data-art="meteor">流星雨</button>
+      <button id="undo" data-art="remove">移除一隻</button>
+      <button id="clear" data-art="remove">清空</button>
     </div>
     <label class="slider">自轉速度 <input id="spd" type="range" min="0" max="100" value="35"></label>
     <label class="slider">流星頻率 <input id="met" type="range" min="0" max="100" value="50"></label>
@@ -181,12 +206,12 @@
           <button class="sw" style="--c:#4f6d8f" data-c="#4f6d8f" title="丹寧藍"></button>
           <button class="sw" style="--c:#a07cb0" data-c="#a07cb0" title="薰衣草紫"></button>
         </div>
-        <button id="cAdd" class="addbtn">＋ 加入行程</button>
+        <button id="cAdd" class="addbtn" data-art="calendar">加入行程</button>
       </div>
       <div class="clist" id="cList"></div>
     </div>
   </div>
-  <button id="toggle">✦ 星球居民及行事曆<b id="count">0</b></button>
+  <button id="toggle" type="button" data-art="manager" title="星球居民及行事曆管理">星球居民及行事曆<b id="count">0</b></button>
 </div>
 
 <script type="module">
@@ -1321,7 +1346,7 @@ layout();
 const ui = document.getElementById('ui'), panel = document.getElementById('panel'), countEl = document.getElementById('count');
 let rotSpeed = .07, idleT = 0;
 function updateCount() { countEl.textContent = creatures.length; }
-document.getElementById('toggle').onclick = () => { panel.hidden = !panel.hidden; save(); };
+if (!WALL) document.getElementById('toggle').onclick = () => { panel.hidden = !panel.hidden; save(); };
 panel.querySelectorAll('[data-add]').forEach(b => b.onclick = () => addCreature(b.dataset.add));
 document.getElementById('undo').onclick = () => creatures.length && removeCreature(creatures[creatures.length - 1]);
 document.getElementById('clear').onclick = () => { while (creatures.length) removeCreature(creatures[0]); };
@@ -1426,7 +1451,7 @@ function pushData(beacon) {
 setInterval(() => pushData(false), 2000);
 addEventListener('pagehide', () => { save(); pushData(true); });
 
-/* 「星球居民管理」視窗透過 localStorage 傳指令過來（桌布本身不接收滑鼠點擊） */
+/* 「星球居民管理」視窗透過 localStorage 傳指令過來 */
 const CMD_KEY = 'planet-wallpaper-cmds';
 function runCmd(c) {
   if (c.a === 'add') addCreature(c.t);
@@ -1478,6 +1503,122 @@ setInterval(pollCmds, 400);
 const CAL_KEY = 'planet-wallpaper-calendar';
 const MONTH_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const calDetails = document.getElementById('calDetails');
+const calDetailsTitle = document.getElementById('calDetailsTitle');
+const calDetailsNav = document.getElementById('calDetailsNav');
+const calTriggers = new WeakMap();
+const desktopToken = WALL && HAS_SERVER ? PARAMS.get('desktopInput') : null;
+const calEventColor = e => /^#[0-9a-f]{6}$/i.test(e.color || '') ? e.color : '#f5cf47';
+let detailTrigger = null, detailIndex = 0, detailPinned = false, hoveredTrigger = null;
+function closeCalDetails() {
+  detailTrigger?.setAttribute('aria-expanded', 'false');
+  detailTrigger = null;
+  detailPinned = false;
+  calDetails.hidden = true;
+}
+function positionCalDetails() {
+  if (!detailTrigger) return;
+  const anchor = detailTrigger.getBoundingClientRect();
+  const cell = detailTrigger.closest('.cal-day').getBoundingClientRect();
+  const { offsetWidth: width, offsetHeight: height } = calDetails;
+  let left = cell.right + 8, top = anchor.top;
+  if (left + width > innerWidth - 8) {
+    left = cell.left - width - 8;
+    if (left < 8) {
+      left = anchor.left;
+      top = cell.bottom + height + 16 <= innerHeight ? cell.bottom + 8 : cell.top - height - 8;
+    }
+  }
+  calDetails.style.left = `${Math.max(8, Math.min(left, innerWidth - width - 8))}px`;
+  calDetails.style.top = `${Math.max(8, Math.min(top, innerHeight - height - 8))}px`;
+}
+function showCalDetails(trigger, pinned, index = 0) {
+  detailTrigger?.setAttribute('aria-expanded', 'false');
+  detailTrigger = trigger;
+  detailPinned = pinned;
+  detailIndex = index;
+  const list = calTriggers.get(trigger), event = list[index];
+  trigger.setAttribute('aria-expanded', String(pinned));
+  document.getElementById('calDetailsWhen').textContent = `${event.date} · ${event.time || '未指定時間'}`;
+  calDetailsTitle.textContent = event.title || '';
+  calDetailsTitle.style.setProperty('--c', calEventColor(event));
+  calDetailsNav.hidden = list.length < 2 || !pinned;
+  calDetailsNav.firstElementChild.disabled = index === 0;
+  calDetailsNav.lastElementChild.disabled = index === list.length - 1;
+  document.getElementById('calDetailsCount').textContent = `${index + 1} / ${list.length}`;
+  calDetails.classList.toggle('pinned', pinned);
+  calDetails.hidden = false;
+  positionCalDetails();
+}
+function hoverCalTrigger(trigger) {
+  if (trigger === hoveredTrigger) return;
+  hoveredTrigger = trigger;
+  if (detailPinned) return;
+  if (trigger) showCalDetails(trigger, false);
+  else closeCalDetails();
+}
+function activateCalTarget(target) {
+  if (WALL && target?.closest('#toggle')) {
+    closeCalDetails();
+    if (desktopToken) {
+      fetch('/open-manager', { method: 'POST', headers: { 'X-Desktop-Input': desktopToken } }).catch(() => {});
+    } else {
+      window.open('control.html', '_blank', 'noopener');
+    }
+    return;
+  }
+  const step = target?.closest('[data-cal-step]');
+  if (detailPinned && step && calDetails.contains(step)) {
+    if (!step.disabled) showCalDetails(detailTrigger, true, detailIndex + Number(step.dataset.calStep));
+    return;
+  }
+  if (detailPinned && calDetails.contains(target)) return;
+  const trigger = target?.closest('.cal-trigger');
+  if (trigger && (trigger !== detailTrigger || !detailPinned)) showCalDetails(trigger, true);
+  else closeCalDetails();
+}
+function createCalTrigger(className, label, events) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = `cal-trigger ${className}`;
+  button.textContent = label;
+  if (!desktopToken) {
+    button.addEventListener('pointerenter', () => hoverCalTrigger(button));
+    button.addEventListener('pointerleave', () => hoverCalTrigger(null));
+  }
+  button.setAttribute('aria-controls', 'calDetails');
+  button.setAttribute('aria-expanded', 'false');
+  calTriggers.set(button, events);
+  return button;
+}
+function calTargetAt(point) {
+  return point ? document.elementFromPoint(point[0] * innerWidth, point[1] * innerHeight) : null;
+}
+if (desktopToken) {
+  const pointerUrl = '/desktop-pointer?window=' + encodeURIComponent(MIRROR || 'main');
+  let lastClick;
+  async function pollDesktopPointer() {
+    try {
+      const response = await fetch(pointerUrl, { headers: { 'X-Desktop-Input': desktopToken } });
+      if (!response.ok) throw new Error('Desktop input unavailable');
+      const { point, click, serial } = await response.json();
+      hoverCalTrigger(calTargetAt(point)?.closest('.cal-trigger') || null);
+      if (lastClick !== undefined && serial !== lastClick) activateCalTarget(calTargetAt(click));
+      lastClick = serial;
+    } catch {
+      hoverCalTrigger(null);
+    }
+    setTimeout(pollDesktopPointer, 65);
+  }
+  pollDesktopPointer();
+}
+addEventListener('click', e => {
+  if (!desktopToken || e.detail === 0) activateCalTarget(e.target);
+});
+addEventListener('resize', positionCalDetails);
+addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeCalDetails();
+});
 let calRaw = undefined, calToday = '';
 function renderCal(force) {
   let raw = null;
@@ -1502,6 +1643,8 @@ function renderCal(force) {
   const weeks = Math.ceil((first.getDay() + days) / 7);
   const grid = document.getElementById('calGrid');
   grid.style.gridTemplateRows = `repeat(${weeks},1fr)`;
+  closeCalDetails();
+  hoveredTrigger = null;
   grid.replaceChildren();
   let monthCount = 0;
   for (let i = 0; i < weeks * 7; i++) {
@@ -1514,12 +1657,11 @@ function renderCal(force) {
     if (d.getMonth() === m) monthCount += list.length;
     const max = weeks > 5 ? 2 : 3;
     list.slice(0, max).forEach(e => {
-      const ev = document.createElement('div'); ev.className = 'cal-ev';
-      ev.style.setProperty('--c', /^#[0-9a-f]{6}$/i.test(e.color || '') ? e.color : '#f5cf47');
-      ev.textContent = (e.time ? e.time + ' ' : '') + (e.title || '');
+      const ev = createCalTrigger('cal-ev', (e.time ? e.time + ' ' : '') + (e.title || ''), [e]);
+      ev.style.setProperty('--c', calEventColor(e));
       cell.append(ev);
     });
-    if (list.length > max) { const mo = document.createElement('div'); mo.className = 'cal-more'; mo.textContent = `+${list.length - max} 個行程`; cell.append(mo); }
+    if (list.length > max) cell.append(createCalTrigger('cal-more', `+${list.length - max} 個行程`, list.slice(max)));
     grid.append(cell);
   }
   document.getElementById('calM').textContent = `${m + 1}月`;
@@ -1591,7 +1733,8 @@ function renderCalEditor() {
     const bar = document.createElement('span'); bar.className = 'bar';
     const when = document.createElement('div'); when.className = 'when'; when.textContent = `${d.getMonth() + 1}/${d.getDate()}（${WD[d.getDay()]}）` + (e.time ? `\n${e.time}` : '');
     const what = document.createElement('div'); what.className = 'what'; what.textContent = e.title;
-    const del = document.createElement('button'); del.className = 'del'; del.title = '刪除這個行程'; del.textContent = '✕';
+    const del = document.createElement('button'); del.className = 'del'; del.title = '刪除這個行程';
+    del.setAttribute('aria-label', del.title); del.dataset.art = 'remove';
     del.onclick = () => calDelete(e.id);
     row.append(bar, when, what, del); box.append(row);
   }
@@ -1599,7 +1742,10 @@ function renderCalEditor() {
 renderCalEditor();
 addEventListener('storage', e => { if (e.key === CAL_KEY) renderCalEditor(); });
 // 標題讓安裝程式找到桌布視窗（主桌布 / 其他螢幕的複本）
-if (WALL) { ui.style.display = 'none'; document.title = MIRROR ? 'PlanetWallpaper|mirror|' + MIRROR : 'PlanetWallpaper|main|' + displayMode(); }
+if (WALL) {
+  document.body.classList.add('wallpaper');
+  document.title = MIRROR ? 'PlanetWallpaper|mirror|' + MIRROR : 'PlanetWallpaper|main|' + displayMode();
+}
 
 scene.updateMatrixWorld(true);
 load();

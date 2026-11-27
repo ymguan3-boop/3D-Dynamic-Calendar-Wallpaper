@@ -8,6 +8,13 @@ fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(out, { recursive: true });
 
 const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+const assets = path.join(root, 'assets');
+const pngData = name => 'data:image/png;base64,' + fs.readFileSync(path.join(assets, name)).toString('base64');
+const iconStyles = read('assets/icons.css').replace(/url\("([\w-]+\.png)"\)/g, (_, name) => `url("${pngData(name)}")`);
+const managerImage = pngData('manager.png');
+const embedIcons = html => html
+  .replace('<link rel="stylesheet" href="assets/icons.css">', () => `<style>\n${iconStyles}\n</style>`)
+  .replaceAll('assets/manager.png', managerImage);
 const safe = (name, code) => { if (/<\/script|<!--/i.test(code)) throw new Error(`${name} contains sequences unsafe for inline embedding`); return code; };
 const parts = {
   '/*THREE_SRC*/': safe('three', read('vendor/three.module.min.js')),
@@ -21,8 +28,14 @@ for (const [k, v] of Object.entries(parts)) {
   if (!html.includes(k)) throw new Error('placeholder missing in index.html: ' + k);
   html = html.replace(k, () => v);
 }
-fs.writeFileSync(path.join(out, 'index.html'), html);
-for (const f of ['control.html', 'open-control.html']) fs.copyFileSync(path.join(root, f), path.join(out, f));
+fs.writeFileSync(path.join(out, 'index.html'), embedIcons(html));
+for (const f of ['control.html', 'open-control.html']) fs.writeFileSync(path.join(out, f), embedIcons(read(f)));
+
+const icons = path.join(out, 'icons');
+fs.mkdirSync(icons);
+for (const name of ['manager.ico', 'start.ico', 'stop.ico', 'remove.ico']) {
+  fs.copyFileSync(path.join(assets, name), path.join(icons, name));
+}
 
 const inst = path.join(root, 'installer');
 for (const f of ['lpw.ps1', 'install.ps1', 'uninstall.ps1']) {
