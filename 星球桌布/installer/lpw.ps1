@@ -50,6 +50,7 @@ public static class LPW {
   [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
   [DllImport("user32.dll")] public static extern bool SetLayeredWindowAttributes(IntPtr h, uint key, byte a, uint f);
   [DllImport("user32.dll")] static extern bool GetLayeredWindowAttributes(IntPtr h, out uint key, out byte a, out uint f);
@@ -335,6 +336,8 @@ function Repair-ControlWindows {
     $k = $h.ToInt64()
     if ($script:Fixed.ContainsKey($k)) { continue }
     $script:Fixed[$k] = $true
+    # Edge may reopen the window minimized if it was minimized last time; bring it back first
+    if ([LPW]::IsIconic($h)) { [void][LPW]::ShowWindow($h, 9); Start-Sleep -Milliseconds 500; Log 'control window restored from minimized' }
     $r = New-Object LPW+RECT; [void][LPW]::GetWindowRect($h, [ref]$r)
     $cx = ($r.Left + $r.Right) / 2; $cy = ($r.Top + $r.Bottom) / 2
     $mon = @(Get-Monitors | Where-Object { $cx -ge $_.L -and $cx -lt $_.R -and $cy -ge $_.T -and $cy -lt $_.B })[0]
