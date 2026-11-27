@@ -74,7 +74,14 @@
     <button class="chip" id="clearBtn" title="清除這個視窗裡的對話（不會保存）">清除畫面</button>
   </div>
   <div class="voice-note" id="voiceNote">正在檢查本機語音…</div>
-  <label class="voice-note" id="naturalOption" hidden><input type="checkbox" id="naturalVoice">使用 Edge 線上自然女聲（朗讀文字會送往 Microsoft）</label>
+  <div class="voice-note">
+    <label for="voiceStyle">小公主聲線</label>
+    <select id="voiceStyle">
+      <option value="local">輕柔女聲（本機）</option>
+      <option value="natural">臺灣自然女聲（線上）</option>
+    </select>
+    <button type="button" class="chip" id="voicePreview">試聽</button>
+  </div>
   <div id="log" aria-live="polite"></div>
   <div id="live"></div>
   <form id="form" autocomplete="off">
@@ -108,7 +115,6 @@ async function refreshStatus() {
   const b = $('modeBadge');
   b.textContent = status.mode === 'personal' ? 'Groq AI' : '本機模式・離線';
   b.classList.toggle('warn', status.mode === 'personal');
-  $('naturalOption').hidden = status.mode !== 'personal';
   pickVoice();
   return status;
 }
@@ -141,38 +147,52 @@ const ai = createPrincessAI({
   }
 });
 
-/* ---------- 語音合成：只用 Windows 本機的臺灣中文聲線，不使用線上聲線 ---------- */
-let voice = null, speakSeq = Date.now() % 100000;
+/* ---------- 語音播放與對話操作各自進行 ---------- */
+let voice = null, speakSeq = Date.now() % 100000, utterance = null;
+try { $('voiceStyle').value = localStorage.getItem('princess-voice-style') === 'natural' ? 'natural' : 'local'; } catch {}
 function pickVoice() {
-  const all = speechSynthesis.getVoices().filter(v => (v.localService || (status.mode === 'personal' && $('naturalVoice').checked)) && /^zh[-_]TW/i.test(v.lang));
-  const pref = status.settings?.voice;
-  voice = all.find(v => v.name === pref) || all.find(v => /HsiaoChen|HsiaoYu|曉臻|曉雨/i.test(v.name)) || all.find(v => /Hanhan/i.test(v.name)) || all.find(v => /Yating/i.test(v.name)) ||
-          all.find(v => !/Zhiwei/i.test(v.name)) || all[0] || null;
-  $('voiceNote').textContent = voice ? `語音：${voice.name.replace(/^Microsoft\s*/, '').split(' - ')[0]}（${voice.localService ? "本機" : "線上自然女聲"}）・按住麥克風說話，最長 30 秒，按 Esc 取消。`
-    : '這台電腦沒有臺灣中文本機語音，小公主會改用文字回答（可在 Windows 設定 → 時間與語言 → 語音 新增）。';
+  const all = speechSynthesis.getVoices().filter(v => /^zh[-_]TW/i.test(v.lang));
+  const local = all.filter(v => v.localService);
+  const natural = $('voiceStyle').value === 'natural' && !status.locked && status.cloudAllowed !== false;
+  const online = natural && (all.find(v => !v.localService && /HsiaoYu|曉雨/i.test(v.name)) ||
+    all.find(v => !v.localService && /HsiaoChen|曉臻/i.test(v.name)));
+  voice = online || local.find(v => /Yating|雅婷/i.test(v.name)) || local.find(v => /Hanhan|涵涵/i.test(v.name)) || null;
+  const label = voice?.name.replace(/^Microsoft\s*/, '').split(' - ')[0];
+  $('voiceNote').textContent = !voice ? '目前沒有可用的臺灣中文女聲。' :
+    natural && !online ? 'Edge 尚未提供臺灣自然女聲，目前使用 ' + label + '（本機）。' :
+    '目前聲線：' + label + (online ? '（線上自然女聲）' : '（本機）');
 }
-$('naturalVoice').onchange = pickVoice;
+$('voiceStyle').onchange = () => {
+  const style = $('voiceStyle');
+  if (style.value === 'natural' && !confirm('線上自然女聲會將朗讀文字送往 Microsoft。要啟用嗎？')) style.value = 'local';
+  try { localStorage.setItem('princess-voice-style', style.value); } catch {}
+  pickVoice();
+};
+$('voicePreview').onclick = () => speak({reply:'嗨，我是住在小星球上的小公主。今天想和我聊些什麼呢？', emotion:'happy'});
 speechSynthesis.addEventListener('voiceschanged', pickVoice);
 function feed(text, emotion, gesture, speaking) {
   call('/ai/speech', { seq: speakSeq, text, emotion, gesture, speaking }).catch(() => {});
 }
 function speak(r) {
-  const text = r.reply.replace(/[「」]/g, '').replace(/[~～]/g, '。');
+  stopSpeech();
   speakSeq++;
-  if (ai.muted || !voice) { feed(r.reply, r.emotion, r.gesture, false); return Promise.resolve(); }
-  return new Promise(done => {
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.voice = voice; u.lang = voice.lang; u.rate = 1; u.pitch = voice.localService ? 1.08 : 1.02;
-    let started = false;
-    u.onstart = () => { started = true; speaking = true; feed(r.reply, r.emotion, r.gesture, true); };
-    const end = () => { speaking = false; feed(r.reply, r.emotion, r.gesture, false); done(); };
-    u.onend = end;
-    u.onerror = () => { if (!started) feed(r.reply, r.emotion, r.gesture, false); speaking = false; done(); };
-    speechSynthesis.speak(u);
-  });
+  if (ai.muted || !voice) { feed(r.reply, r.emotion, r.gesture, false); return; }
+  const u = new SpeechSynthesisUtterance(r.reply.replace(/[「」]/g, '').replace(/[~～]/g, '。'));
+  utterance = u;
+  u.voice = voice;
+  u.lang = voice.lang;
+  u.rate = voice.localService ? .96 : .98;
+  u.pitch = voice.localService ? 1.13 : 1.03;
+  u.onstart = () => { if (utterance === u) feed(r.reply, r.emotion, r.gesture, true); };
+  u.onend = u.onerror = () => { if (utterance === u) { utterance = null; feed(r.reply, r.emotion, r.gesture, false); } };
+  speechSynthesis.speak(u);
 }
-let speaking = false;
+function stopSpeech() {
+  if (!utterance) return;
+  utterance = null;
+  speechSynthesis.cancel();
+  feed('', 'idle', '', false);
+}
 
 /* ---------- 畫面 ---------- */
 const log = $('log');
@@ -201,8 +221,8 @@ function show(r) {
     const ok = document.createElement('button'); ok.className = 'btn sage'; ok.textContent = '確認';
     const no = document.createElement('button'); no.className = 'btn cream'; no.textContent = '取消';
     const id = r.confirm.requestId;
-    ok.onclick = () => { if (ai.pending?.requestId !== id) return expire(card); lock(card); run(() => ai.confirm(), '確認'); };
-    no.onclick = () => { if (ai.pending?.requestId !== id) return expire(card); lock(card); run(() => Promise.resolve(ai.cancel()), '取消'); };
+    ok.onclick = () => { if (busy) return; if (ai.pending?.requestId !== id) return expire(card); lock(card); run(() => ai.confirm(), '確認'); };
+    no.onclick = () => { if (busy) return; if (ai.pending?.requestId !== id) return expire(card); lock(card); run(() => Promise.resolve(ai.cancel()), '取消'); };
     row.append(ok, no); card.append(sum, row); extra.append(card);
     activeCard = card;
   }
@@ -216,7 +236,7 @@ function show(r) {
   add('her', r.reply, extra);
   if (typeof r.muted === 'boolean') { ai.muted = r.muted; $('muteBtn').classList.toggle('on', r.muted); }
   if (typeof r.dnd === 'boolean') { ai.dnd = r.dnd; $('dndBtn').classList.toggle('on', r.dnd); saveFlags(); }
-  return speak(r);
+  speak(r);
 }
 let activeCard = null;
 const lock = card => card.querySelectorAll('button').forEach(b => b.disabled = true);
@@ -225,9 +245,9 @@ let busy = false;
 async function run(fn, echo) {
   if (busy) return; busy = true;
   if (activeCard && echo == null) lock(activeCard);
-  try { const r = await fn(); if (r) await show(r); }
+  try { const r = await fn(); if (r) show(r); }
   catch (e) { add('her', '我剛剛出了點問題：' + (e.message || '未知錯誤')); }
-  finally { busy = false; $('text').focus(); }
+  finally { busy = false; }
 }
 function send(text) {
   text = String(text || '').trim(); if (!text || busy) return;
@@ -236,7 +256,7 @@ function send(text) {
   run(() => ai.handle(text));
 }
 $('form').onsubmit = e => { e.preventDefault(); const t = $('text').value; $('text').value = ''; send(t); };
-$('muteBtn').onclick = () => { ai.muted = !ai.muted; $('muteBtn').classList.toggle('on', ai.muted); if (ai.muted) speechSynthesis.cancel(); saveFlags(); };
+$('muteBtn').onclick = () => { ai.muted = !ai.muted; $('muteBtn').classList.toggle('on', ai.muted); if (ai.muted) stopSpeech(); saveFlags(); };
 $('dndBtn').onclick = () => { ai.dnd = !ai.dnd; $('dndBtn').classList.toggle('on', ai.dnd); saveFlags(); };
 $('clearBtn').onclick = () => { log.replaceChildren(); ai.cancel(); activeCard = null; };
 // 靜音、勿擾與問候時間只是本機偏好，不含對話內容
@@ -273,7 +293,7 @@ const tidy = s => toTraditional(String(s || '').replace(/(?<=[㐀-鿿])\s+(?=[�
 async function startRec() {
   if (preparing || rec || busy) return;
   preparing = true; clearTimeout(idleTimer);
-  speechSynthesis.cancel(); speaking = false;          // 說話前先停止播放，避免收到自己的聲音
+  stopSpeech();          // 說話前先停止播放，避免收到自己的聲音
   const mic = $('mic');
   mic.classList.add('busy'); mic.textContent = '準備中…';
   let stream;
@@ -332,11 +352,11 @@ mic.addEventListener('pointerup', () => { holding = false; if (rec) stopRec(fals
 mic.addEventListener('pointercancel', () => { holding = false; if (rec) stopRec(true); });
 // 鍵盤：空白鍵按住說話（焦點不在輸入框時），Esc 取消
 addEventListener('keydown', e => {
-  if (e.key === 'Escape') { holding = false; if (rec) stopRec(true); speechSynthesis.cancel(); }
-  if (e.code === 'Space' && document.activeElement !== $('text') && !e.repeat) { e.preventDefault(); holding = true; startRec(); }
+  if (e.key === 'Escape') { holding = false; if (rec) stopRec(true); stopSpeech(); }
+  if (e.code === 'Space' && !document.activeElement?.matches('input,select,button,textarea') && !e.repeat) { e.preventDefault(); holding = true; startRec(); }
 });
-addEventListener('keyup', e => { if (e.code === 'Space' && document.activeElement !== $('text')) { holding = false; if (rec) stopRec(false); } });
-addEventListener('pagehide', () => { if (rec) stopRec(true); speechSynthesis.cancel(); feed('', 'idle', '', false); if (model) model.terminate(); });
+addEventListener('keyup', e => { if (e.code === 'Space' && !document.activeElement?.matches('input,select,button,textarea')) { holding = false; if (rec) stopRec(false); } });
+addEventListener('pagehide', () => { if (rec) stopRec(true); stopSpeech(); feed('', 'idle', '', false); if (model) model.terminate(); });
 
 /* ---------- 開啟時：主動問候（冷卻 15 分鐘、每小時最多 2 次、勿擾時不問候） ---------- */
 await refreshStatus();

@@ -801,13 +801,14 @@ function updateBubbles(dt) {
 }
 
 /* ================= 小公主（Blender 模型 + princess-rig.js） ================= */
-const prince = { g: new THREE.Group(), expressionAnchor: new THREE.Group(), yaw: 0, model: null };
+const prince = { outfit: 'classic', g: new THREE.Group(), expressionAnchor: new THREE.Group(), yaw: 0, model: null };
 prince.g.position.copy(UP).multiplyScalar(heightAt(UP) - .005);
 prince.g.add(prince.expressionAnchor);
 planet.add(prince.g);
 new GLTFLoader().parse(princessGLB, '', gltf => {
   prince.model = createPrincess(THREE, gltf.scene);
   prince.g.add(prince.model.root);
+  prince.model.setOutfit(prince.outfit);
 }, err => console.error('小公主模型載入失敗', err));
 // 說話泡泡對應的表情
 const FACE_OF = { '😊': 'happy', '👋': 'happy', '💛': 'happy', '🌱': 'happy', '🥕': 'happy', '♪': 'happy', '👍': 'happy', '🌹': 'happy', '😆': 'happy',
@@ -1469,6 +1470,13 @@ function onLivelyProp(name, val) {
   else if (name.startsWith('add_')) addCreature(name.slice(4));
 }
 
+function setPrincessOutfit(outfit) {
+  const next = ['garden', 'swim'].includes(outfit) ? outfit : 'classic';
+  if (prince.outfit === next) return;
+  prince.outfit = next;
+  prince.model?.setOutfit(next);
+}
+
 /* 存檔（瀏覽器本機儲存） */
 const KEY = 'planet-wallpaper-planet-v1';
 function save() {
@@ -1476,7 +1484,7 @@ function save() {
   try {
     localStorage.setItem(KEY, JSON.stringify({
       list: creatures.map(c => ({ t: c.type, d: c.dir.toArray().map(v => +v.toFixed(3)) })),
-      spd: +spdEl.value, met: +metEl.value, open: !panel.hidden
+      spd: +spdEl.value, met: +metEl.value, open: !panel.hidden, outfit: prince.outfit
     }));
   } catch (e) { /* 無法儲存時照常運作 */ }
 }
@@ -1484,6 +1492,7 @@ function load() {
   let s = null;
   try { s = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { s = null; }
   if (s && Array.isArray(s.list)) {
+    setPrincessOutfit(s.outfit);
     spdEl.value = s.spd ?? 35; metEl.value = s.met ?? 50; panel.hidden = !s.open;
     rotSpeed = spdEl.value / 100 * .2; meteorRate = metEl.value / 50;
     for (const c of s.list) if (BUILD[c.t]) addCreature(c.t, new THREE.Vector3().fromArray(c.d), true);
@@ -1546,6 +1555,12 @@ function runCmd(c) {
     pushData(false);
     return;
   }
+  if (c.a === 'outfit' && ['classic', 'garden', 'swim'].includes(c.v)) {
+    setPrincessOutfit(c.v);
+    save();
+    pushData(false);
+    return;
+  }
   if (c.a === 'add') addCreature(c.t);
   else if (c.a === 'undo') creatures.length && removeCreature(creatures[creatures.length - 1]);
   else if (c.a === 'clear') while (creatures.length) removeCreature(creatures[0]);
@@ -1567,6 +1582,7 @@ function mirrorSync() {
   if (mirrorShower !== null && sh !== mirrorShower && Date.now() - Number(sh) < 5000) { showerLeft = 12; showerClock = 0; }
   mirrorShower = sh;
   if (!s || !Array.isArray(s.list)) return;
+  setPrincessOutfit(s.outfit);
   if (s.spd != null) rotSpeed = s.spd / 100 * .2;
   if (s.met != null) meteorRate = s.met / 50;
   const now = s.list.filter(c => BUILD[c.t]), sig = now.map(c => c.t).join(',');

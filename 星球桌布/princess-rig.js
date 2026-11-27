@@ -215,6 +215,80 @@ export function createPrincess(THREE, gltfScene) {
   root.traverse(o => { if (o.name) J[o.name] = o; });
   upgradeMaterials(THREE, root);
 
+  const dressPalette = {
+    dress: 0x396444, over: 0x55835d, skirt: 0x85a876, sash: 0xd6bb72,
+    pinkR: 0xd8e2ac, lilacR: 0xacc793, puff: 0x729966, tulle: 0xc3db9f, tulleL: 0xdcebb0, gemP: 0x91bc88
+  };
+  const fabricColors = new Map();
+  root.traverse(object => {
+    const material = object.material;
+    if (material && Object.hasOwn(dressPalette, material.name)) fabricColors.set(material, material.color.clone());
+  });
+
+  const ponytail = new THREE.Group();
+  ponytail.position.set(0, .215, -.121);
+  J.head.add(ponytail);
+  const hair = J.hair_cap.material;
+  const ball = new THREE.SphereGeometry(1, 20, 14);
+  function oval(parent, material, position, scale) {
+    const mesh = new THREE.Mesh(ball, material);
+    mesh.position.set(...position);
+    mesh.scale.set(...scale);
+    mesh.castShadow = true;
+    parent.add(mesh);
+    return mesh;
+  }
+  const tie = new THREE.MeshStandardMaterial({ color: 0xb9cf83 });
+  oval(ponytail, hair, [0,.027,-.043], [.053,.062,.081]).rotation.x = -.52;
+  oval(ponytail, J.crown_band.material, [0,.027,-.091], [.046,.041,.028]);
+  oval(ponytail, hair, [0,-.032,-.111], [.052,.102,.053]).rotation.x = .35;
+  oval(ponytail, hair, [.014,-.106,-.118], [.038,.069,.043]).rotation.z = .34;
+  for (const side of [-1,1]) {
+    oval(ponytail, tie, [side*.033,.073,-.092], [.035,.018,.015]).rotation.z = side*.5;
+  }
+
+  const swimwear = new THREE.Group();
+  J.hips.add(swimwear);
+  const navy = new THREE.MeshStandardMaterial({ color: 0x287e83, roughness: .78 });
+  const ivory = new THREE.MeshStandardMaterial({ color: 0xffedbd, roughness: .75 });
+  const skin = J.head_skin.material;
+  const bottom = new THREE.Mesh(new THREE.LatheGeometry([
+    new THREE.Vector2(.078,.034), new THREE.Vector2(.085,-.005), new THREE.Vector2(.116,-.073),
+    new THREE.Vector2(.125,-.093), new THREE.Vector2(.121,-.1)
+  ].reverse(), 32), navy);
+  bottom.castShadow = true;
+  swimwear.add(bottom);
+  for (const side of [-1,1]) {
+    const x = side*.047;
+    oval(swimwear, skin, [x,-.134,0], [.042,.081,.042]);
+    oval(swimwear, skin, [x,-.246,.002], [.031,.079,.032]);
+    oval(swimwear, navy, [x,-.321,.021], [.038,.027,.056]);
+  }
+  for (const [y,radius] of [[.028,.08],[-.087,.123]]) {
+    const trim = new THREE.Mesh(new THREE.TorusGeometry(radius,.006,10,32), ivory);
+    trim.rotation.x = Math.PI / 2;
+    trim.position.y = y;
+    swimwear.add(trim);
+  }
+
+  const dressDetails = Object.entries(J).filter(([name]) =>
+    /^(collar|stomacher|lace_eye_|lacing_|brooch|puff_|cuff_|shoe_|sock_)/.test(name));
+  function setOutfit(outfit) {
+    const isSwim = outfit === 'swim';
+    const isGarden = outfit === 'garden';
+    for (const [material, color] of fabricColors) {
+      material.color.copy(color);
+      if (isGarden) material.color.setHex(dressPalette[material.name]);
+      if (isSwim && material.name === 'dress') material.color.copy(navy.color);
+    }
+    J.skirt.visible = J.sash.visible = J.bow.visible = !isSwim;
+    for (const [,object] of dressDetails) object.visible = !isSwim;
+    J.hairBack.visible = !isGarden;
+    ponytail.visible = isGarden;
+    swimwear.visible = isSwim;
+  }
+  setOutfit('classic');
+
   // 表情殼：貼合頭部正面、比頭大 1%
   const atlas = faceAtlas(THREE);
   const headSkin = J.head_skin;
@@ -374,6 +448,8 @@ export function createPrincess(THREE, gltfScene) {
     // ---- 頭髮與緞帶：延遲的大幅度擺動
     J.hairBack.rotation.x = .04 + Math.sin(t * 1.6) * .05 + (p === 'stars' ? .3 : 0);
     J.hairBack.rotation.z = Math.sin(t * 1.2 + .5) * .05;
+    ponytail.rotation.x = Math.sin(t * 1.6) * .1;
+    ponytail.rotation.z = Math.sin(t * 1.2 + .5) * .065;
     for (const side of ['L', 'R']) for (let i = 1; i <= 4; i++) {
       const r = J[`ribbon_${side}_${i}`];
       if (!r) continue;
@@ -383,5 +459,5 @@ export function createPrincess(THREE, gltfScene) {
       r.rotation.z = (i === 1 ? .3 : 0) * (side === 'L' ? 1 : -1) + Math.sin(t * 1.7 - i * .6) * .06 * (side === 'L' ? 1 : -1);
     }
   }
-  return { root, J, express, update, expressions: EXPRESSIONS };
+  return { root, J, express, update, setOutfit, expressions: EXPRESSIONS };
 }

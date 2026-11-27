@@ -127,7 +127,8 @@
   .opt:disabled{opacity:.45;cursor:not-allowed;background:var(--cream)}
   .badge{font-size:10.5px;padding:2px 8px;border-radius:999px;background:var(--sage);color:#fbfff4;letter-spacing:.08em;white-space:nowrap}
   .badge.off{background:#b9a48a}
-[hidden]{display:none!important} #home{display:grid;grid-template-columns:repeat(2,1fr);gap:12px} #home button{padding:16px 6px;font:inherit;font-weight:bold;color:#70422c;border:1px solid #cba87c;border-radius:14px;background:#fff8e9;box-shadow:0 3px #dbc4a0;cursor:pointer} #home button:hover{background:#f8ecd3} #home button::before{content:"";display:block;height:72px;background:var(--entry-art) center/contain no-repeat;margin-bottom:6px} #backHome{margin-bottom:10px}.key-tools{display:grid;gap:7px;margin:12px 0}.key-tools a{color:#70422c}</style>
+[hidden]{display:none!important} #home{display:grid;grid-template-columns:repeat(2,1fr);gap:12px} #home button{padding:16px 6px;font:inherit;font-weight:bold;color:#70422c;border:1px solid #cba87c;border-radius:14px;background:#fff8e9;box-shadow:0 3px #dbc4a0;cursor:pointer} #home button:hover{background:#f8ecd3} #home button::before{content:"";display:block;height:72px;background:var(--entry-art) center/contain no-repeat;margin-bottom:6px} #backHome{margin-bottom:10px}.key-tools{display:grid;gap:7px;margin:12px 0}.key-tools a{color:#70422c}.outfit-picker{display:grid;gap:5px;margin:12px 0}.outfit-picker select{font:inherit;color:inherit;background:#fff9ee;border:1px solid #cba87c;border-radius:9px;padding:8px}
+</style>
 </head>
 <body>
   <div class="sign">
@@ -183,6 +184,14 @@
       <button class="story-action" data-cmd="shower" data-story-action="meteor">流星雨</button>
       <button class="story-action" data-cmd="undo" data-story-action="undo">移除一隻</button>
       <button class="story-action" data-cmd="clear" data-story-action="clear">清空</button>
+    </div>
+    <div class="outfit-picker">
+      <label for="outfit">小公主換裝</label>
+      <select id="outfit">
+        <option value="classic">經典紫洋裝</option>
+        <option value="garden">綠色洋裝・公主高馬尾</option>
+        <option value="swim">童話泳裝</option>
+      </select>
     </div>
     <label class="slider">自轉速度 <input id="spd" type="range" min="0" max="100" value="35"></label>
     <label class="slider">流星頻率 <input id="met" type="range" min="0" max="100" value="50"></label>
@@ -309,9 +318,24 @@
   });
   const st0 = read(STATE_KEY, null);
   if (st0) { $('spd').value = st0.spd ?? 35; $('met').value = st0.met ?? 50; }
+  const outfitEl = $('outfit');
+  let outfitRequest = false;
+  outfitEl.onchange = async () => {
+    const command = { a: 'outfit', v: outfitEl.value };
+    if (!HAS_SERVER) { send(command); return; }
+    outfitRequest = true;
+    outfitEl.disabled = true;
+    try { await postCommand(command); }
+    catch { toast('無法換裝，請確認桌布正在執行'); }
+    finally { outfitRequest = false; outfitEl.disabled = !managerAlive; }
+  };
   $('spd').onchange = () => send({ a: 'spd', v: +$('spd').value });
   $('met').onchange = () => send({ a: 'met', v: +$('met').value });
   function refresh() {
+    if (!outfitRequest) {
+      outfitEl.value = read(STATE_KEY, null)?.outfit || 'classic';
+      outfitEl.disabled = HAS_SERVER && !managerAlive;
+    }
     const b = read(BEAT_KEY, null);
     const alive = HAS_SERVER ? managerAlive : b && Date.now() - b.t < 4000;
     const count = HAS_SERVER ? read(STATE_KEY, null)?.list?.length ?? 0 : b?.n;
