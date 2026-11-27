@@ -184,6 +184,16 @@
         <button class="sw" style="--c:#a07cb0" data-c="#a07cb0" title="薰衣草紫"></button>
       </div>
       <button class="btn red wide" id="eAdd" data-art="calendar">加入行程</button>
+      <details class="calendar-export wide" id="eExport">
+        <summary>行程一次匯出</summary>
+        <div class="export-range">
+          <label>起始日期<input type="date" data-export-start max="9999-12-31"></label>
+          <label>結束日期<input type="date" data-export-end max="9999-12-31"></label>
+        </div>
+        <p>起訖日皆包含，兩欄留空可匯出全部行程。</p>
+        <button type="button" class="btn sage" data-export-download>匯出 Excel</button>
+        <div role="status" data-export-status></div>
+      </details>
     </div>
     <div class="list">
       <div class="head" id="listHead"></div>
@@ -193,6 +203,7 @@
   <div class="toast" id="toast"></div>
   <div class="credit">創作人 官毅明</div>
 
+<script src="calendar-export.js"></script>
 <script>
   const CMD_KEY = 'planet-wallpaper-cmds', STATE_KEY = 'planet-wallpaper-planet-v1', BEAT_KEY = 'planet-wallpaper-beat',
         CAL_KEY = 'planet-wallpaper-calendar', DISPLAY_KEY = 'planet-wallpaper-display';
@@ -359,6 +370,7 @@
     }
   }
   render();
+  initCalendarExport($('eExport'), () => loadCal().events);
   async function refreshManager() {
     try {
       const response = await fetch('/manager-state', { headers: managerHeaders });

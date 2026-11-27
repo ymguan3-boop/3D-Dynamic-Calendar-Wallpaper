@@ -16,6 +16,8 @@ const embedIcons = html => html
   .replace('<link rel="stylesheet" href="assets/icons.css">', () => `<style>\n${iconStyles}\n</style>`)
   .replaceAll('assets/manager.png', managerImage);
 const safe = (name, code) => { if (/<\/script|<!--/i.test(code)) throw new Error(`${name} contains sequences unsafe for inline embedding`); return code; };
+const exportScript = safe('calendar export', read('calendar-export.js'));
+const embedPage = html => embedIcons(html).replace('<script src="calendar-export.js"></script>', () => `<script>\n${exportScript}\n</script>`);
 const parts = {
   '/*THREE_SRC*/': safe('three', read('vendor/three.module.min.js')),
   '/*BGU_SRC*/': safe('BufferGeometryUtils', read('vendor/BufferGeometryUtils.js')),
@@ -29,8 +31,8 @@ for (const [k, v] of Object.entries(parts)) {
   if (!html.includes(k)) throw new Error('placeholder missing in index.html: ' + k);
   html = html.replace(k, () => v);
 }
-fs.writeFileSync(path.join(out, 'index.html'), embedIcons(html));
-for (const f of ['control.html', 'open-control.html']) fs.writeFileSync(path.join(out, f), embedIcons(read(f)));
+fs.writeFileSync(path.join(out, 'index.html'), embedPage(html));
+for (const f of ['control.html', 'open-control.html']) fs.writeFileSync(path.join(out, f), embedPage(read(f)));
 
 const icons = path.join(out, 'icons');
 fs.mkdirSync(icons);

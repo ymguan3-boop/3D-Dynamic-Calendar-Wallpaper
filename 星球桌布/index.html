@@ -208,6 +208,16 @@
           <button class="sw" style="--c:#a07cb0" data-c="#a07cb0" title="薰衣草紫"></button>
         </div>
         <button id="cAdd" class="addbtn" data-art="calendar">加入行程</button>
+        <details class="calendar-export" id="cExport">
+          <summary>行程一次匯出</summary>
+          <div class="export-range">
+            <label>起始日期<input type="date" data-export-start max="9999-12-31"></label>
+            <label>結束日期<input type="date" data-export-end max="9999-12-31"></label>
+          </div>
+          <p>起訖日皆包含，兩欄留空可匯出全部行程。</p>
+          <button type="button" data-export-download>匯出 Excel</button>
+          <div role="status" data-export-status></div>
+        </details>
       </div>
       <div class="clist" id="cList"></div>
     </div>
@@ -215,6 +225,7 @@
   <button id="toggle" type="button" data-art="manager" title="星球居民及行事曆管理">星球居民及行事曆<b id="count">0</b></button>
 </div>
 
+<script src="calendar-export.js"></script>
 <script type="module">
 // three.js、模型載入器、小公主程式與模型：離線版全部內嵌在頁面裡（不需網路），開發版從 CDN 與本機檔案載入
 const srcOf = id => { const el = document.getElementById(id); return el ? el.textContent : ''; };
@@ -1676,10 +1687,18 @@ function calTargetAt(point) {
 }
 if (desktopToken) {
   const pointerUrl = '/desktop-pointer?window=' + encodeURIComponent(MIRROR || 'main');
+  const managerButton = document.getElementById('toggle');
   let lastClick;
   async function pollDesktopPointer() {
     try {
-      const response = await fetch(pointerUrl, { headers: { 'X-Desktop-Input': desktopToken } });
+      const headers = { 'X-Desktop-Input': desktopToken };
+      const bounds = managerButton.getBoundingClientRect();
+      if (bounds.width && bounds.height && innerWidth && innerHeight) {
+        const basisPoints = value => Math.max(0, Math.min(10000, Math.round(value * 10000)));
+        headers['X-Manager-Button'] = [bounds.left / innerWidth, bounds.top / innerHeight,
+          bounds.right / innerWidth, bounds.bottom / innerHeight].map(basisPoints).join(',');
+      }
+      const response = await fetch(pointerUrl, { headers });
       if (!response.ok) throw new Error('Desktop input unavailable');
       const { point, click, serial } = await response.json();
       hoverCalTrigger(calTargetAt(point)?.closest('.cal-trigger') || null);
@@ -1795,6 +1814,7 @@ function addFromPanel() {
   else cEl('cTitle').focus();
 }
 cEl('cAdd').onclick = addFromPanel;
+initCalendarExport(cEl('cExport'), () => loadCal().events);
 cEl('cTitle').addEventListener('keydown', e => { if (e.key === 'Enter') addFromPanel(); });
 cEl('cDate').value = ymd(new Date());
 function renderCalEditor() {

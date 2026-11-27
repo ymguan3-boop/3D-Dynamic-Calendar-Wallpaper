@@ -27,3 +27,12 @@
 .del[data-art]::before { width: 22px; height: 22px; }
 .row button[data-art]::before, .tab[data-art]::before, .addbtn[data-art]::before,
 #eAdd[data-art]::before { margin-right: 4px; }
+
+.calendar-export { grid-column: 1 / -1; padding: 9px 10px; border: 1px solid #dcc8a6; border-radius: 9px; background: #fffaf0; color: #5b3a24; }
+.calendar-export summary { cursor: pointer; font-size: 13px; font-weight: 700; }
+.export-range { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin-top: 9px; }
+.export-range label { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; }
+.export-range input { box-sizing: border-box; width: 100%; min-width: 0; }
+.calendar-export p, [data-export-status] { margin: 7px 0; color: #755b44; font-size: 12px; }
+[data-export-status]:empty { display: none; }
+[data-export-download] { padding: 6px 11px; }

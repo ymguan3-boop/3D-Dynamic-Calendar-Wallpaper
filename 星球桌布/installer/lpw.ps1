@@ -67,6 +67,26 @@ public static class LPW {
   [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr h, uint flags);
   [DllImport("user32.dll")] static extern short GetAsyncKeyState(int key);
   [DllImport("user32.dll")] static extern int GetSystemMetrics(int index);
+  delegate IntPtr WindowProcedure(IntPtr h, uint message, IntPtr w, IntPtr l);
+  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)] struct WindowClass {
+    public uint Style; public WindowProcedure Procedure; public int ClassExtra, WindowExtra;
+    public IntPtr Instance, Icon, Cursor, Background;
+    public string MenuName, ClassName;
+  }
+  [StructLayout(LayoutKind.Sequential)] struct Message {
+    public IntPtr Window; public uint Id; public IntPtr W, L; public uint Time; public POINT Point; uint Reserved;
+  }
+  [DllImport("kernel32.dll", CharSet=CharSet.Unicode)] static extern IntPtr GetModuleHandle(string name);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern ushort RegisterClass(ref WindowClass wc);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern IntPtr CreateWindowEx(uint ex, string cls, string name,
+    uint style, int x, int y, int w, int h, IntPtr parent, IntPtr menu, IntPtr instance, IntPtr param);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern IntPtr DefWindowProc(IntPtr h, uint message, IntPtr w, IntPtr l);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern IntPtr LoadCursor(IntPtr instance, IntPtr resource);
+  [DllImport("gdi32.dll")] static extern IntPtr GetStockObject(int id);
+  [DllImport("user32.dll")] static extern bool DestroyWindow(IntPtr h);
+  [DllImport("user32.dll")] static extern bool ScreenToClient(IntPtr h, ref POINT point);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern bool PeekMessage(out Message msg, IntPtr h, uint min, uint max, uint remove);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern IntPtr DispatchMessage(ref Message msg);
 
   // PowerShell turns $null into "" for string arguments, so null titles are passed from here
   public static IntPtr FindCls(string c) { return FindWindow(c, null); }
@@ -140,6 +160,13 @@ public static class LPW {
   public static readonly string InputToken = Guid.NewGuid().ToString("N");
   static readonly object inputLock = new object();
   static readonly Dictionary<string, IntPtr> inputWindows = new Dictionary<string, IntPtr>();
+  static readonly Dictionary<string, ButtonPosition> managerButtons = new Dictionary<string, ButtonPosition>();
+  static readonly Dictionary<string, IntPtr> cursorTargets = new Dictionary<string, IntPtr>();
+  const string ManagerButtonClass = "PlanetWallpaperManagerButton";
+  // Hold the delegate for the lifetime of the native window class.
+  static readonly WindowProcedure managerButtonProc = ManagerButtonProc;
+  static IntPtr pressedManagerButton;
+  sealed class ButtonPosition { public RECT BasisPoints; public DateTime Updated; }
   static POINT? cursor, lastClick;
   static int clickSerial;
   static int managerRequested;
@@ -150,30 +177,112 @@ public static class LPW {
 
   public static void SetInputWindow(string key, IntPtr window) {
     lock (inputLock) {
-      if (window == IntPtr.Zero) inputWindows.Remove(key);
+      if (window == IntPtr.Zero) { inputWindows.Remove(key); managerButtons.Remove(key); }
       else inputWindows[key] = window;
     }
   }
   public static void ClearInputWindows() {
-    lock (inputLock) { inputWindows.Clear(); }
+    lock (inputLock) { inputWindows.Clear(); managerButtons.Clear(); }
   }
-  static bool IsDesktopPoint(POINT point) {
-    IntPtr top = GetAncestor(WindowFromPoint(point), 2);
+  static bool IsDesktopWindow(IntPtr hit) {
+    IntPtr top = GetAncestor(hit, 2);
     var name = new StringBuilder(64);
     GetClassName(top, name, name.Capacity);
     return name.ToString() == "Progman" ||
       (name.ToString() == "WorkerW" && FindChild(top, "SHELLDLL_DefView") != IntPtr.Zero);
   }
+  static IntPtr ManagerButtonProc(IntPtr h, uint message, IntPtr w, IntPtr l) {
+    if (message == 0x21) return new IntPtr(3); // WM_MOUSEACTIVATE: receive the click without activating the child
+    if (message == 0x201) { pressedManagerButton = h; return IntPtr.Zero; } // WM_LBUTTONDOWN
+    if (message == 0x202) {
+      if (pressedManagerButton == h) System.Threading.Interlocked.Exchange(ref managerRequested, 1);
+      pressedManagerButton = IntPtr.Zero;
+      return IntPtr.Zero;
+    }
+    return DefWindowProc(h, message, w, l);
+  }
+  static IntPtr DesktopIconView() {
+    var view = FindChild(FindCls("Progman"), "SHELLDLL_DefView");
+    IntPtr worker = IntPtr.Zero;
+    while (view == IntPtr.Zero && (worker = FindWindowEx(IntPtr.Zero, worker, "WorkerW", null)) != IntPtr.Zero)
+      view = FindChild(worker, "SHELLDLL_DefView");
+    return view;
+  }
+  static void UpdateCursorTargets(IntPtr instance, ref IntPtr desktopView) {
+    var buttons = new Dictionary<string, RECT>();
+    lock (inputLock) {
+      foreach (var entry in inputWindows) {
+        ButtonPosition button; RECT window;
+        if (!managerButtons.TryGetValue(entry.Key, out button) || DateTime.UtcNow - button.Updated > TimeSpan.FromSeconds(1) ||
+            !IsWindowVisible(entry.Value) || !GetWindowRect(entry.Value, out window)) continue;
+        RECT b = button.BasisPoints;
+        int width = window.Right - window.Left, height = window.Bottom - window.Top;
+        buttons[entry.Key] = new RECT {
+          Left = window.Left + width * b.Left / 10000, Top = window.Top + height * b.Top / 10000,
+          Right = window.Left + width * b.Right / 10000, Bottom = window.Top + height * b.Bottom / 10000
+        };
+      }
+    }
+    if (!IsWindow(desktopView)) desktopView = DesktopIconView();
+    foreach (string key in new List<string>(cursorTargets.Keys)) {
+      IntPtr target = cursorTargets[key];
+      if (!buttons.ContainsKey(key) || !IsWindow(target) || GetParent(target) != desktopView) {
+        DestroyWindow(target);
+        cursorTargets.Remove(key);
+      }
+    }
+    if (desktopView == IntPtr.Zero) return;
+    foreach (var button in buttons) {
+      RECT bounds = button.Value;
+      POINT corner = new POINT { X = bounds.Left, Y = bounds.Top };
+      if (!ScreenToClient(desktopView, ref corner)) continue;
+      IntPtr target;
+      if (!cursorTargets.TryGetValue(button.Key, out target)) {
+        // One nearly transparent child above the desktop icon list, only over the app's button.
+        target = CreateWindowEx(0x08080000, ManagerButtonClass, "", 0x40000000,
+          0, 0, 0, 0, desktopView, IntPtr.Zero, instance, IntPtr.Zero);
+        if (target == IntPtr.Zero) continue;
+        if (!SetLayeredWindowAttributes(target, 0, 1, 2)) { DestroyWindow(target); continue; }
+        cursorTargets[button.Key] = target;
+      }
+      RECT shown;
+      if (!IsWindowVisible(target) || !GetWindowRect(target, out shown) ||
+          shown.Left != bounds.Left || shown.Top != bounds.Top || shown.Right != bounds.Right || shown.Bottom != bounds.Bottom)
+        SetWindowPos(target, IntPtr.Zero, corner.X, corner.Y, bounds.Right - bounds.Left, bounds.Bottom - bounds.Top, 0x50);
+    }
+  }
+  static void RememberManagerButton(string key, string header) {
+    string[] values = header.Split(',');
+    var points = new int[4];
+    if (values.Length != points.Length) return;
+    for (int i = 0; i < points.Length; i++)
+      if (!Int32.TryParse(values[i], out points[i]) || points[i] < 0 || points[i] > 10000) return;
+    if (points[0] >= points[2] || points[1] >= points[3]) return;
+    managerButtons[key] = new ButtonPosition {
+      BasisPoints = new RECT { Left = points[0], Top = points[1], Right = points[2], Bottom = points[3] },
+      Updated = DateTime.UtcNow
+    };
+  }
   static void ObserveDesktopPointer() {
+    IntPtr instance = GetModuleHandle(null), desktopView = IntPtr.Zero;
+    WindowClass cursorClass = ManagerButtonWindowClass(instance);
+    bool cursorClassReady = RegisterClass(ref cursorClass) != 0;
+    int tick = 0;
     POINT? pressedAt = null;
     bool wasDown = false;
     while (true) {
+      Message message;
+      while (PeekMessage(out message, IntPtr.Zero, 0, 0, 1)) DispatchMessage(ref message);
+      if (cursorClassReady && (tick++ % 4) == 0) UpdateCursorTargets(instance, ref desktopView);
       int button = GetSystemMetrics(23) == 0 ? 1 : 2; // SM_SWAPBUTTON
       bool down = (GetAsyncKeyState(button) & 0x8000) != 0;
       POINT point;
-      bool onDesktop = GetCursorPos(out point) && IsDesktopPoint(point);
-      if (down && !wasDown) pressedAt = onDesktop ? (POINT?)point : null;
-      if (pressedAt.HasValue && (!onDesktop ||
+      IntPtr hit = GetCursorPos(out point) ? WindowFromPoint(point) : IntPtr.Zero;
+      bool overManagerButton = cursorTargets.ContainsValue(hit);
+      bool onDesktop = overManagerButton || IsDesktopWindow(hit);
+      if (pressedManagerButton != hit) pressedManagerButton = IntPtr.Zero;
+      if (down && !wasDown) pressedAt = onDesktop && !overManagerButton ? (POINT?)point : null;
+      if (pressedAt.HasValue && (!onDesktop || overManagerButton ||
           Math.Abs(pressedAt.Value.X - point.X) > GetSystemMetrics(68) ||
           Math.Abs(pressedAt.Value.Y - point.Y) > GetSystemMetrics(69))) pressedAt = null;
       lock (inputLock) {
@@ -188,6 +297,12 @@ public static class LPW {
       System.Threading.Thread.Sleep(15);
     }
   }
+  static WindowClass ManagerButtonWindowClass(IntPtr instance) {
+    return new WindowClass {
+      Instance = instance, ClassName = ManagerButtonClass, Procedure = managerButtonProc,
+      Cursor = LoadCursor(IntPtr.Zero, new IntPtr(32649)), Background = GetStockObject(0)
+    };
+  }
   // Fractional coordinates align the Win32 window with CSS pixels at any display scale.
   static string PointerPosition(POINT? p, RECT r) {
     if (!p.HasValue || p.Value.X < r.Left || p.Value.X >= r.Right ||
@@ -196,11 +311,14 @@ public static class LPW {
       (p.Value.X - r.Left) / (double)(r.Right - r.Left),
       (p.Value.Y - r.Top) / (double)(r.Bottom - r.Top));
   }
-  static string DesktopPointer(string key) {
+  static string DesktopPointer(string key, string button) {
     lock (inputLock) {
       IntPtr window;
       RECT rect = new RECT();
-      if (inputWindows.TryGetValue(key, out window)) GetWindowRect(window, out rect);
+      if (inputWindows.TryGetValue(key, out window)) {
+        GetWindowRect(window, out rect);
+        if (button != null) RememberManagerButton(key, button);
+      }
       return "{\"point\":" + PointerPosition(cursor, rect) + ",\"click\":" + PointerPosition(lastClick, rect) +
         ",\"serial\":" + clickSerial + "}";
     }
@@ -326,7 +444,10 @@ public static class LPW {
         else if (path == "/desktop-pointer" && method == "GET" && desktopInput) {
           string prefix = "/desktop-pointer?window=";
           string key = parts[1].StartsWith(prefix, StringComparison.Ordinal) ? Uri.UnescapeDataString(parts[1].Substring(prefix.Length)) : "";
-          body = Encoding.UTF8.GetBytes(DesktopPointer(key)); type = "application/json; charset=utf-8";
+          const string buttonHeader = "X-Manager-Button:";
+          string button = Array.Find(headers, h => h.StartsWith(buttonHeader, StringComparison.OrdinalIgnoreCase));
+          body = Encoding.UTF8.GetBytes(DesktopPointer(key, button == null ? null : button.Substring(buttonHeader.Length).Trim()));
+          type = "application/json; charset=utf-8";
         }
         else if (path == "/open-manager" && method == "POST" && desktopInput) {
           System.Threading.Interlocked.Exchange(ref managerRequested, 1);
