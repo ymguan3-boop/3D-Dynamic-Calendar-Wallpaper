@@ -22,10 +22,10 @@
   #ui.dim{opacity:.16}
   #ui:hover{opacity:1}
   .wallpaper #ui{opacity:1}
-  #ui button{font:inherit;color:inherit;cursor:pointer;border:1px solid var(--ui-line);background:var(--ui-bg);
+  #ui button:where(:not(.story-action)){font:inherit;color:inherit;cursor:pointer;border:1px solid var(--ui-line);background:var(--ui-bg);
     backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-radius:999px;transition:background .2s,border-color .2s,transform .1s}
-  #ui button:hover{background:rgba(40,42,80,.8);border-color:rgba(245,207,71,.5)}
-  #ui button:active{transform:scale(.96)}
+  #ui button:where(:not(.story-action)):hover{background:rgba(40,42,80,.8);border-color:rgba(245,207,71,.5)}
+  #ui button:where(:not(.story-action)):active{transform:scale(.96)}
   #toggle{padding:8px 16px;font-size:14px;letter-spacing:.06em}
   #toggle[data-art]{display:flex;align-items:center;gap:7px}
   #toggle b{display:inline-block;min-width:20px;margin-left:6px;padding:1px 7px;border-radius:999px;background:rgba(245,207,71,.18);color:var(--ui-accent);font-weight:600}
@@ -42,9 +42,9 @@
   .slider input{flex:1;accent-color:var(--ui-accent)}
   .hint{margin-top:12px;font-size:11px;color:var(--ui-dim);line-height:1.5;opacity:.8}
   /* 操作面板：鄉村美式風格（亞麻、木頭、格紋、縫線） */
-  #ui button{color:#3e2c20;background:#fffaf0;border:1.5px solid #dcc8a6;backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:0 2px 0 #dcc8a6}
-  #ui button:hover{background:#fff1d6;border-color:#c9a87c}
-  #ui button:active{transform:translateY(2px);box-shadow:none}
+  #ui button:where(:not(.story-action)){color:#3e2c20;background:#fffaf0;border:1.5px solid #dcc8a6;backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:0 2px 0 #dcc8a6}
+  #ui button:where(:not(.story-action)):hover{background:#fff1d6;border-color:#c9a87c}
+  #ui button:where(:not(.story-action)):active{transform:translateY(2px);box-shadow:none}
   #toggle{color:#fdf3df!important;font-family:"Noto Serif TC","PMingLiU",Georgia,serif;letter-spacing:.14em!important;border-color:rgba(0,0,0,.15)!important;
     background:repeating-linear-gradient(91deg,rgba(0,0,0,.07) 0 2px,transparent 2px 11px),linear-gradient(180deg,#a7744f,#8a5a3b)!important;box-shadow:0 2px 0 #5b3a24!important}
   #toggle b{background:#fffaf0;color:#a8432f}
@@ -73,11 +73,10 @@
   #panel .cform{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px}
   #panel .cform input{font:inherit;font-size:12.5px;color:#3e2c20;padding:6px 8px;border-radius:8px;border:1.5px solid #dcc8a6;background:#fffdf7;outline:none;min-width:0;color-scheme:light}
   #panel .cform input:focus{border-color:#c9a87c}
-  #panel #cTitle,#panel .sws,#panel .addbtn{grid-column:1/-1}
+  #panel #cTitle,#panel .sws,#panel #cAdd{grid-column:1/-1}
   #panel .sws{display:flex;gap:8px;align-items:center}
   #panel .sw{width:22px;height:22px;padding:0;border-radius:50%!important;background:var(--c)!important;border:2px solid #fffaf0!important;box-shadow:0 0 0 1.5px #dcc8a6!important}
   #panel .sw.on{box-shadow:0 0 0 2.5px #5b3a24!important}
-  #panel .addbtn{padding:7px;border-radius:9px;background:#a8432f!important;color:#fff6ea!important;border-color:rgba(0,0,0,.12)!important;letter-spacing:.08em}
   #panel .clist{margin-top:10px;max-height:190px;overflow-y:auto}
   #panel .cev{display:flex;align-items:center;gap:8px;padding:6px 2px;border-bottom:1px dashed #dcc8a6;font-size:12.5px}
   #panel .cev .bar{width:4px;align-self:stretch;border-radius:3px;background:var(--c)}
@@ -181,9 +180,9 @@
       <button data-add="rabbit"><span>兔子</span></button>
     </div>
     <div class="row">
-      <button id="shower" data-art="meteor">流星雨</button>
-      <button id="undo" data-art="remove">移除一隻</button>
-      <button id="clear" data-art="remove">清空</button>
+      <button class="story-action" id="shower" data-story-action="meteor">流星雨</button>
+      <button class="story-action" id="undo" data-story-action="undo">移除一隻</button>
+      <button class="story-action" id="clear" data-story-action="clear">清空</button>
     </div>
     <label class="slider">自轉速度 <input id="spd" type="range" min="0" max="100" value="35"></label>
     <label class="slider">流星頻率 <input id="met" type="range" min="0" max="100" value="50"></label>
@@ -207,15 +206,15 @@
           <button class="sw" style="--c:#4f6d8f" data-c="#4f6d8f" title="丹寧藍"></button>
           <button class="sw" style="--c:#a07cb0" data-c="#a07cb0" title="薰衣草紫"></button>
         </div>
-        <button id="cAdd" class="addbtn" data-art="calendar">加入行程</button>
+        <button class="story-action" id="cAdd" data-story-action="add">加入行程</button>
         <details class="calendar-export" id="cExport">
-          <summary>行程一次匯出</summary>
+          <summary class="story-action" data-story-action="export">行程一次匯出</summary>
           <div class="export-range">
             <label>起始日期<input type="date" data-export-start max="9999-12-31"></label>
             <label>結束日期<input type="date" data-export-end max="9999-12-31"></label>
           </div>
           <p>起訖日皆包含，兩欄留空可匯出全部行程。</p>
-          <button type="button" data-export-download>匯出 Excel</button>
+          <button type="button" class="story-action" data-story-action="excel" data-export-download>匯出 Excel</button>
           <div role="status" data-export-status></div>
         </details>
       </div>

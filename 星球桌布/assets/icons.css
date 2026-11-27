@@ -6,7 +6,6 @@
 [data-add="rabbit"] { --art: url("rabbit.png"); }
 [data-art="calendar"] { --art: url("calendar.png"); }
 [data-art="planet"] { --art: url("planet.png"); }
-[data-art="meteor"] { --art: url("meteor.png"); }
 [data-art="remove"] { --art: url("remove.png"); }
 [data-art="manager"] { --art: url("manager.png"); }
 [data-art="display-primary"] { --art: url("display-primary.png"); }
@@ -25,14 +24,70 @@
 [data-add]::before { width: 40px; height: 40px; }
 .opt[data-art]::before { width: 52px; height: 30px; }
 .del[data-art]::before { width: 22px; height: 22px; }
-.row button[data-art]::before, .tab[data-art]::before, .addbtn[data-art]::before,
-#eAdd[data-art]::before { margin-right: 4px; }
+.tab[data-art]::before { margin-right: 4px; }
 
-.calendar-export { grid-column: 1 / -1; padding: 9px 10px; border: 1px solid #dcc8a6; border-radius: 9px; background: #fffaf0; color: #5b3a24; }
-.calendar-export summary { cursor: pointer; font-size: 13px; font-weight: 700; }
+.story-action, #ui .story-action {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  min-height: 38px;
+  padding: 5px 8px;
+  border: 1px solid var(--story-border);
+  border-radius: 10px;
+  background: linear-gradient(var(--story-top), var(--story-bottom)), url("action-wood.png") center / cover;
+  background-blend-mode: multiply;
+  color: var(--story-ink);
+  box-shadow: inset 0 1px 0 #ffffff80, 0 2px 0 var(--story-border);
+  cursor: pointer;
+  font-family: "Noto Serif TC", "PMingLiU", Georgia, serif;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.story-action::before { content: ""; width: 24px; height: 24px; flex: none; background: var(--story-icon) center / contain no-repeat; }
+.row .story-action { flex: 1; }
+.story-action:hover, #ui .story-action:hover { filter: brightness(1.055); }
+.story-action:active, #ui .story-action:active { transform: translateY(2px); box-shadow: inset 0 1px 2px #61462a28; }
+.story-action:focus-visible { outline: 2px solid #684327; outline-offset: 2px; }
+[data-story-action="meteor"] {
+  --story-icon: url("action-meteor.png"); --story-top: #eff3d6d6; --story-bottom: #cedbb6dc;
+  --story-border: #9dad7b; --story-ink: #34462d;
+}
+[data-story-action="undo"] {
+  --story-icon: url("action-undo.png"); --story-top: #fff1d5d6; --story-bottom: #ebd0a3dc;
+  --story-border: #c5a06d; --story-ink: #553821;
+}
+[data-story-action="clear"] {
+  --story-icon: url("action-clear.png"); --story-top: #ffecdfd6; --story-bottom: #efc3b4dc;
+  --story-border: #c88e7c; --story-ink: #663124;
+}
+[data-story-action="add"] {
+  --story-icon: url("action-add.png"); --story-top: #984b34ed; --story-bottom: #7e3d29ef;
+  --story-border: #723723; --story-ink: #fff8ea;
+}
+[data-story-action="export"] {
+  --story-icon: url("action-export.png"); --story-top: #f9f0e7d6; --story-bottom: #e9dcebdc;
+  --story-border: #baa5b6; --story-ink: #573b50;
+}
+[data-story-action="excel"] {
+  --story-icon: url("action-excel.png"); --story-top: #f2f5e4d6; --story-bottom: #d5e5cbdc;
+  --story-border: #9bad90; --story-ink: #324638;
+}
+.calendar-export { grid-column: 1 / -1; border-radius: 10px; color: #5b3a24; }
+.calendar-export[open] { background: #fff8eb; box-shadow: inset 0 0 0 1px #dcc8a6; padding-bottom: 8px; }
+.calendar-export summary.story-action { list-style: none; justify-content: flex-start; }
+.calendar-export summary::-webkit-details-marker { display: none; }
+.calendar-export summary::after {
+  content: ""; width: 6px; height: 6px; margin-inline: auto 4px;
+  border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg);
+}
+.calendar-export[open] summary::after { transform: rotate(225deg); }
+.calendar-export[open] > :not(summary) { margin-inline: 9px; }
 .export-range { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin-top: 9px; }
 .export-range label { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; }
 .export-range input { box-sizing: border-box; width: 100%; min-width: 0; }
 .calendar-export p, [data-export-status] { margin: 7px 0; color: #755b44; font-size: 12px; }
 [data-export-status]:empty { display: none; }
-[data-export-download] { padding: 6px 11px; }

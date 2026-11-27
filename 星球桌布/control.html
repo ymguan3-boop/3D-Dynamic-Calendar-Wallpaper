@@ -150,9 +150,9 @@
       <button class="tile" data-add="rabbit"><span>兔子</span></button>
     </div>
     <div class="row">
-      <button class="btn sage" data-cmd="shower" data-art="meteor">流星雨</button>
-      <button class="btn kraft" data-cmd="undo" data-art="remove">移除一隻</button>
-      <button class="btn red" data-cmd="clear" data-art="remove">清空</button>
+      <button class="story-action" data-cmd="shower" data-story-action="meteor">流星雨</button>
+      <button class="story-action" data-cmd="undo" data-story-action="undo">移除一隻</button>
+      <button class="story-action" data-cmd="clear" data-story-action="clear">清空</button>
     </div>
     <label class="slider">自轉速度 <input id="spd" type="range" min="0" max="100" value="35"></label>
     <label class="slider">流星頻率 <input id="met" type="range" min="0" max="100" value="50"></label>
@@ -183,15 +183,15 @@
         <button class="sw" style="--c:#4f6d8f" data-c="#4f6d8f" title="丹寧藍"></button>
         <button class="sw" style="--c:#a07cb0" data-c="#a07cb0" title="薰衣草紫"></button>
       </div>
-      <button class="btn red wide" id="eAdd" data-art="calendar">加入行程</button>
+      <button class="story-action wide" id="eAdd" data-story-action="add">加入行程</button>
       <details class="calendar-export wide" id="eExport">
-        <summary>行程一次匯出</summary>
+        <summary class="story-action" data-story-action="export">行程一次匯出</summary>
         <div class="export-range">
           <label>起始日期<input type="date" data-export-start max="9999-12-31"></label>
           <label>結束日期<input type="date" data-export-end max="9999-12-31"></label>
         </div>
         <p>起訖日皆包含，兩欄留空可匯出全部行程。</p>
-        <button type="button" class="btn sage" data-export-download>匯出 Excel</button>
+        <button type="button" class="story-action" data-story-action="excel" data-export-download>匯出 Excel</button>
         <div role="status" data-export-status></div>
       </details>
     </div>
