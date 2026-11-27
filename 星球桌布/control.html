@@ -127,7 +127,14 @@
   .opt:disabled{opacity:.45;cursor:not-allowed;background:var(--cream)}
   .badge{font-size:10.5px;padding:2px 8px;border-radius:999px;background:var(--sage);color:#fbfff4;letter-spacing:.08em;white-space:nowrap}
   .badge.off{background:#b9a48a}
-[hidden]{display:none!important} #home{display:grid;grid-template-columns:repeat(2,1fr);gap:12px} #home button{padding:16px 6px;font:inherit;font-weight:bold;color:#70422c;border:1px solid #cba87c;border-radius:14px;background:#fff8e9;box-shadow:0 3px #dbc4a0;cursor:pointer} #home button:hover{background:#f8ecd3} #home button::before{content:"";display:block;height:72px;background:var(--entry-art) center/contain no-repeat;margin-bottom:6px} #backHome{margin-bottom:10px}.key-tools{display:grid;gap:7px;margin:12px 0}.key-tools a{color:#70422c}.outfit-picker{display:grid;gap:5px;margin:12px 0}.outfit-picker select{font:inherit;color:inherit;background:#fff9ee;border:1px solid #cba87c;border-radius:9px;padding:8px}
+[hidden]{display:none!important} #home{display:grid;grid-template-columns:repeat(2,1fr);gap:12px} #home button{padding:16px 6px;font:inherit;font-weight:bold;color:#70422c;border:1px solid #cba87c;border-radius:14px;background:#fff8e9;box-shadow:0 3px #dbc4a0;cursor:pointer} #home button:hover{background:#f8ecd3} #home button::before{content:"";display:block;height:72px;background:var(--entry-art) center/contain no-repeat;margin-bottom:6px} #backHome{margin-bottom:10px}.key-tools{display:grid;gap:7px;margin:12px 0}.key-tools a{color:#70422c}
+.outfit-picker{min-width:0;margin:12px 0 8px;padding:0;border:0}
+.outfit-picker legend{padding:0 0 6px;font-weight:700}
+.outfit-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.outfit-options button{display:grid;justify-items:center;align-content:center;gap:5px;min-height:95px;padding:7px 3px;background:#fff9ee;color:var(--ink);border:1px solid #cba87c;border-radius:10px;box-shadow:0 2px #e4cba5;font:inherit;font-size:12px;cursor:pointer}
+.outfit-options button::before{content:"";width:100%;height:54px;background:var(--outfit-art) center/contain no-repeat}
+.outfit-options button:hover{background:#f8ecd2}
+.outfit-options button[aria-pressed="true"]{background:#edf0dc;border-color:#789368;box-shadow:inset 0 0 0 1px #789368,0 2px #a3b091;font-weight:700}
 </style>
 </head>
 <body>
@@ -149,7 +156,6 @@
       <button class="opt" data-mode="personal" disabled>Groq AI<small id="cloudNote">雲端未啟用</small></button>
     </div>
     <div class="key-tools"><label for="groqKey">Groq API 金鑰</label><input id="groqKey" type="password" autocomplete="off" spellcheck="false" placeholder="gsk_…"><button class="btn cream" id="saveKey">儲存金鑰</button><a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">申請免費 Groq API 金鑰 ↗</a><small id="keyState" role="status"></small></div>
-    <div class="ai-row"><label><input type="checkbox" id="aiSub">桌布顯示小公主的字幕</label></div>
     <div class="ai-row"><label><input type="checkbox" id="aiMask">桌面隱藏行程名稱（只顯示「行程」）</label></div>
     <div class="ai-row"><label>開啟語音對話的快速鍵</label><input type="text" id="aiHotkey" maxlength="40" placeholder="Ctrl+Alt+P"><span class="badge" id="aiHotkeyState">已啟用</span></div>
     <div class="ai-row"><label>主動問候間隔（分鐘，至少 15）</label><input type="text" id="aiCool" maxlength="3" style="width:60px"></div>
@@ -185,14 +191,14 @@
       <button class="story-action" data-cmd="undo" data-story-action="undo">移除一隻</button>
       <button class="story-action" data-cmd="clear" data-story-action="clear">清空</button>
     </div>
-    <div class="outfit-picker">
-      <label for="outfit">小公主換裝</label>
-      <select id="outfit">
-        <option value="classic">經典紫洋裝</option>
-        <option value="garden">綠色洋裝・公主高馬尾</option>
-        <option value="swim">童話泳裝</option>
-      </select>
-    </div>
+    <fieldset class="outfit-picker" id="outfit">
+      <legend>小公主換裝</legend>
+      <div class="outfit-options">
+        <button type="button" data-outfit="classic" aria-pressed="true"><span>經典紫洋裝</span></button>
+        <button type="button" data-outfit="garden" aria-pressed="false"><span>綠洋裝・高馬尾</span></button>
+        <button type="button" data-outfit="swim" aria-pressed="false"><span>童話泳裝</span></button>
+      </div>
+    </fieldset>
     <label class="slider">自轉速度 <input id="spd" type="range" min="0" max="100" value="35"></label>
     <label class="slider">流星頻率 <input id="met" type="range" min="0" max="100" value="50"></label>
   </section>
@@ -319,23 +325,30 @@
   const st0 = read(STATE_KEY, null);
   if (st0) { $('spd').value = st0.spd ?? 35; $('met').value = st0.met ?? 50; }
   const outfitEl = $('outfit');
-  let outfitRequest = false;
-  outfitEl.onchange = async () => {
-    const command = { a: 'outfit', v: outfitEl.value };
-    if (!HAS_SERVER) { send(command); return; }
-    outfitRequest = true;
+  const outfitButtons = [...outfitEl.querySelectorAll('[data-outfit]')];
+  let requestedOutfit = null;
+  function showOutfit(value) {
+    outfitButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.outfit === value)));
+  }
+  outfitButtons.forEach(button => button.onclick = async () => {
+    const command = { a: 'outfit', v: button.dataset.outfit };
+    if (button.getAttribute('aria-pressed') === 'true') return;
+    if (!HAS_SERVER) { send(command); showOutfit(command.v); return; }
+    const request = requestedOutfit = { id: Infinity };
     outfitEl.disabled = true;
-    try { await postCommand(command); }
-    catch { toast('無法換裝，請確認桌布正在執行'); }
-    finally { outfitRequest = false; outfitEl.disabled = !managerAlive; }
-  };
+    showOutfit(command.v);
+    try { request.id = await postCommand(command); }
+    catch {
+      if (requestedOutfit === request) requestedOutfit = null;
+      refresh();
+      toast('無法換裝，請確認桌布正在執行');
+    }
+  });
   $('spd').onchange = () => send({ a: 'spd', v: +$('spd').value });
   $('met').onchange = () => send({ a: 'met', v: +$('met').value });
   function refresh() {
-    if (!outfitRequest) {
-      outfitEl.value = read(STATE_KEY, null)?.outfit || 'classic';
-      outfitEl.disabled = HAS_SERVER && !managerAlive;
-    }
+    if (!requestedOutfit) showOutfit(read(STATE_KEY, null)?.outfit || 'classic');
+    outfitEl.disabled = HAS_SERVER && (!managerAlive || !!requestedOutfit);
     const b = read(BEAT_KEY, null);
     const alive = HAS_SERVER ? managerAlive : b && Date.now() - b.t < 4000;
     const count = HAS_SERVER ? read(STATE_KEY, null)?.list?.length ?? 0 : b?.n;
@@ -434,18 +447,20 @@ $('eDate').addEventListener('input', e => { e.target.nextElementSibling.textCont
       if (!response.ok) throw new Error('Wallpaper state unavailable');
       const next = await response.json();
       const calendar = raw(CAL_KEY), display = raw(DISPLAY_KEY);
-      if (managerSession && managerSession !== next.session) pending.clear();
+      const sessionChanged = managerSession && managerSession !== next.session;
+      if (sessionChanged) pending.clear();
       if (managerSession !== next.session) {
         const settings = JSON.parse(next.data[STATE_KEY] || 'null');
         if (settings) { $('spd').value = settings.spd ?? 35; $('met').value = settings.met ?? 50; }
         if (next.alive) managerSession = next.session;
       }
       for (const [key, change] of pending) if (change.id <= next.ack) pending.delete(key);
+      if (requestedOutfit && (requestedOutfit.id <= next.ack || !next.alive || sessionChanged)) requestedOutfit = null;
       managerState = next.data;
       managerAlive = next.alive;
       if (calendar !== raw(CAL_KEY)) render();
       if (display !== raw(DISPLAY_KEY)) showDisp();
-    } catch (error) { managerAlive = false; }
+    } catch (error) { managerAlive = false; requestedOutfit = null; }
     refresh();
     setTimeout(refreshManager, 650);
   }
@@ -489,7 +504,7 @@ $('eDate').addEventListener('input', e => { e.target.nextElementSibling.textCont
       $('keyState').textContent = st.cloudConfigured ? '已加密儲存於本機' : '尚未設定金鑰';
       $('saveKey').disabled = !st.cloudAllowed;
       const set = st.settings || {};
-      $('aiSub').checked = set.subtitles !== false; $('aiMask').checked = !!set.maskTitles;
+      $('aiMask').checked = !!set.maskTitles;
       $('aiHotkey').value = set.hotkey || 'Ctrl+Alt+P'; $('aiHotkeyShow').textContent = set.hotkey || 'Ctrl+Alt+P';
       $('aiCool').value = set.greetCooldown ?? 15;
       $('aiHotkeyState').textContent = st.hotkeyActive ? '已啟用' : '被占用'; $('aiHotkeyState').classList.toggle('off', !st.hotkeyActive);
@@ -498,7 +513,7 @@ $('eDate').addEventListener('input', e => { e.target.nextElementSibling.textCont
   $('aiOpen').onclick = async () => { try { const r = await aiPost('/ai/open-chat'); toast(r.ok ? '正在開啟語音對話…' : '無法開啟'); } catch (e) { toast('桌布沒有執行'); } };
   $('aiSave').onclick = async () => {
     const cool = Math.max(15, Math.min(240, parseInt($('aiCool').value, 10) || 15));
-    const r = await aiPost('/ai/settings', { subtitles: $('aiSub').checked, maskTitles: $('aiMask').checked, hotkey: $('aiHotkey').value.trim() || 'Ctrl+Alt+P', greetCooldown: cool });
+    const r = await aiPost('/ai/settings', { maskTitles: $('aiMask').checked, hotkey: $('aiHotkey').value.trim() || 'Ctrl+Alt+P', greetCooldown: cool });
     toast(r.ok ? '對話設定已儲存' : '快速鍵格式不正確，例如 Ctrl+Alt+P');
     setTimeout(loadAi, 1500);
   };

@@ -249,20 +249,24 @@ export function createPrincess(THREE, gltfScene) {
 
   const swimwear = new THREE.Group();
   J.hips.add(swimwear);
-  const navy = new THREE.MeshStandardMaterial({ color: 0x287e83, roughness: .78 });
+  const originalBodiceMaterial = J.bodice.material;
+  const swimFabric = new THREE.MeshPhysicalMaterial({
+    color: 0xffdf89, roughness: .53, sheen: .45, sheenRoughness: .65,
+    sheenColor: new THREE.Color(0xffedb3), bumpMap: J.puff_L.material.bumpMap, bumpScale: .025
+  });
   const ivory = new THREE.MeshStandardMaterial({ color: 0xffedbd, roughness: .75 });
   const skin = J.head_skin.material;
   const bottom = new THREE.Mesh(new THREE.LatheGeometry([
     new THREE.Vector2(.078,.034), new THREE.Vector2(.085,-.005), new THREE.Vector2(.116,-.073),
     new THREE.Vector2(.125,-.093), new THREE.Vector2(.121,-.1)
-  ].reverse(), 32), navy);
+  ].reverse(), 32), swimFabric);
   bottom.castShadow = true;
   swimwear.add(bottom);
   for (const side of [-1,1]) {
     const x = side*.047;
     oval(swimwear, skin, [x,-.134,0], [.042,.081,.042]);
     oval(swimwear, skin, [x,-.246,.002], [.031,.079,.032]);
-    oval(swimwear, navy, [x,-.321,.021], [.038,.027,.056]);
+    oval(swimwear, swimFabric, [x,-.321,.021], [.038,.027,.056]);
   }
   for (const [y,radius] of [[.028,.08],[-.087,.123]]) {
     const trim = new THREE.Mesh(new THREE.TorusGeometry(radius,.006,10,32), ivory);
@@ -279,8 +283,8 @@ export function createPrincess(THREE, gltfScene) {
     for (const [material, color] of fabricColors) {
       material.color.copy(color);
       if (isGarden) material.color.setHex(dressPalette[material.name]);
-      if (isSwim && material.name === 'dress') material.color.copy(navy.color);
     }
+    J.bodice.material = isSwim ? swimFabric : originalBodiceMaterial;
     J.skirt.visible = J.sash.visible = J.bow.visible = !isSwim;
     for (const [,object] of dressDetails) object.visible = !isSwim;
     J.hairBack.visible = !isGarden;

@@ -112,3 +112,7 @@
 [data-entry="display"] { --entry-art:url("entry-display.png"); }
 [data-entry="residents"] { --entry-art:url("entry-residents.png"); }
 [data-entry="calendar"] { --entry-art:url("entry-calendar.png"); }
+
+[data-outfit="classic"] { --outfit-art:url("outfit-classic.png"); }
+[data-outfit="garden"] { --outfit-art:url("outfit-garden.png"); }
+[data-outfit="swim"] { --outfit-art:url("outfit-swim.png"); }

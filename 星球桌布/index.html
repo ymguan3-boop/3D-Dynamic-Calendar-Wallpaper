@@ -89,14 +89,6 @@
   #credit{position:fixed;right:28px;bottom:58px;z-index:4;pointer-events:none;font-size:13px;letter-spacing:.22em;
     color:rgba(253,243,223,.72);font-family:"Noto Serif TC","PMingLiU",Georgia,serif;text-shadow:0 1px 6px rgba(0,0,0,.6)}
   #ui{bottom:96px!important}
-  /* 小公主說話字幕（語音實際播放時才出現；聲音只在對話視窗播放一次） */
-  #princessSay{position:fixed;right:4vw;bottom:24vh;z-index:4;max-width:24vw;pointer-events:none;padding:1.1vh 1vw;border-radius:14px;
-    background:rgba(251,246,234,.93);color:#3e2c20;border:1px dashed #bfa27b;outline:1px solid rgba(91,58,36,.18);outline-offset:3px;
-    font:500 clamp(13px,1.15vw,22px)/1.55 "Microsoft JhengHei",sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.35);
-    opacity:0;transform:translateY(8px);transition:opacity .35s,transform .35s}
-  #princessSay.on{opacity:1;transform:none}
-  #princessSay b{display:block;font:600 .78em "Noto Serif TC","PMingLiU",Georgia,serif;letter-spacing:.16em;color:#a8432f;margin-bottom:.2em}
-
   /* 桌面月曆（只有行程和詳情可互動） */
   #cal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:29vw;height:56vh;display:flex;flex-direction:column;gap:1.1vh;
     padding:2.2vh 1.5vw 1.8vh;border-radius:1.3vw;background:rgba(12,14,38,.34);border:1px solid rgba(255,240,200,.13);
@@ -156,7 +148,6 @@
 <body>
 <div id="err">星球載入失敗（three.js 未能載入）</div>
 <div id="credit">創作人 官毅明</div>
-<div id="princessSay" aria-live="polite"><b>小公主</b><span></span></div>
 <div id="cal" aria-label="月曆">
   <div class="cal-head">
     <div class="cal-m" id="calM"></div>
@@ -1827,10 +1818,9 @@ renderCal(true);
 setInterval(() => renderCal(false), 1000);
 addEventListener('storage', e => { if (e.key === CAL_KEY) renderCal(true); });
 
-/* ---------- 小公主說話：對話視窗播放語音時，桌布同步字幕、表情與動作 ---------- */
+/* ---------- 小公主說話：對話視窗播放語音時，桌布同步表情與動作 ---------- */
 if (desktopToken) {
-  const sayBox = document.getElementById('princessSay'), sayText = sayBox.querySelector('span');
-  let lastSeq = -1, speakingNow = false, hideTimer = 0, feedBusy = false;
+  let lastSeq = -1, speakingNow = false, feedBusy = false;
   async function pollFeed() {
     if (feedBusy || document.hidden) return;
     feedBusy = true;
@@ -1848,15 +1838,11 @@ if (desktopToken) {
       }
       const fresh = sp.seq !== lastSeq;
       lastSeq = sp.seq; speakingNow = !!sp.speaking;
-      clearTimeout(hideTimer);
       if (speakingNow) {
-        if (f.subtitles) { sayText.textContent = sp.text; sayBox.classList.add('on'); }
         if (prince.model) prince.model.express('talk', 1.2);
         if (fresh && sp.gesture) princeDo(sp.gesture, 2.6);
       } else {
         if (prince.model) prince.model.express(sp.emotion || 'happy', 2.4);
-        if (f.subtitles && fresh) { sayText.textContent = sp.text; sayBox.classList.add('on'); }
-        hideTimer = setTimeout(() => sayBox.classList.remove('on'), 3500);
       }
     } catch (e) { /* 服務暫停時下次再試 */ }
     finally { feedBusy = false; }
