@@ -1,0 +1,16 @@
+﻿{
+    "label":  "baseline-main-0f008be-2screens",
+    "time":  "2026-11-27T13:19:48",
+    "seconds":  60,
+    "samples":  12,
+    "wallpaper_private_MB_avg":  882.2,
+    "wallpaper_private_MB_max":  971,
+    "wallpaper_processes":  9,
+    "manager_private_MB_avg":  0,
+    "manager_private_MB_max":  0,
+    "manager_processes":  0,
+    "host_private_MB_avg":  88.1,
+    "host_private_MB_max":  88.1,
+    "host_processes":  1,
+    "total_private_MB_avg":  970.3
+}
