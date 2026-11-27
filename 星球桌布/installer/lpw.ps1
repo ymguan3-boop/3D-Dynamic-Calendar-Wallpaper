@@ -1,4 +1,4 @@
-# Planet wallpaper (小公主的星球) host.
+﻿# Planet wallpaper (小公主的星球) host.
 #   -Action start    : serve the pages on 127.0.0.1, open them in Edge, put them behind the desktop icons
 #                      on the chosen screens, keep watching
 #   -Action control  : open the residents & calendar window
@@ -493,7 +493,7 @@ public static class LPW {
         string extra = PlanetAi.SecurityHeaders(type.StartsWith("text/html", StringComparison.Ordinal));
         if (path == "/ping") extra += "Access-Control-Allow-Origin: *\r\n";
         string head = "HTTP/1.1 " + code + " " + StatusText(code) + "\r\nContent-Type: " + type +
-          "\r\nContent-Length: " + body.Length + "\r\nCache-Control: no-store\r\n" + extra + "Connection: close\r\n\r\n";
+          "\r\nContent-Length: " + body.Length + (path == "/ai/models/vosk-model-small-cn-0.22.tar.gz" && code == 200 ? "\r\nCache-Control: private, max-age=2592000, immutable\r\n" : "\r\nCache-Control: no-store\r\n") + extra + "Connection: close\r\n\r\n";
         var hb = Encoding.ASCII.GetBytes(head);
         s.Write(hb, 0, hb.Length); s.Write(body, 0, body.Length);
       }
@@ -693,7 +693,7 @@ function Open-Chat {
 
 # Organisation policy (HKLM first, then HKCU). Front-end settings can never override these values.
 function Get-AiPolicy {
-  $p = @{ LockOfficialMode = $false; AllowDeviceAI = $false; AllowCloudAI = $false; CloudGatewayUrl = '' }
+  $p = @{ LockOfficialMode = $false; AllowDeviceAI = $false; AllowCloudAI = $true; CloudGatewayUrl = '' }
   $seen = @{}
   foreach ($root in @('HKLM:\SOFTWARE\Policies\PlanetWallpaper', 'HKCU:\SOFTWARE\Policies\PlanetWallpaper')) {
     try {

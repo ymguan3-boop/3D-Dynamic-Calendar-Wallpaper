@@ -246,6 +246,9 @@ export function createPrincess(THREE, gltfScene) {
   can.visible = false;
   can.traverse(o => { if (o.isMesh) o.castShadow = true; });
   J.hand_R.add(can);
+  const phone = new THREE.Mesh(new THREE.BoxGeometry(.038,.075,.011), new THREE.MeshStandardMaterial({color:0xb46076}));
+  const screen = new THREE.Mesh(new THREE.BoxGeometry(.031,.058,.002),new THREE.MeshStandardMaterial({color:0x423448}));
+  screen.position.z=.006; phone.add(screen); phone.visible=false; J.hand_R.add(phone);
   // 捏住把手的點：每格畫面取大拇指、食指、中指末節的中點（右手局部座標）
   const PINCH = new THREE.Vector3(), _pv = new THREE.Vector3(), _hm = new THREE.Matrix4();
   function pinchPoint() {
@@ -333,6 +336,11 @@ export function createPrincess(THREE, gltfScene) {
     // ---- 手臂（L 在角色左手邊 = +x）
     // 平常：手臂微微外張、手肘往前彎，手停在蓬裙外側（直直垂下會被裙子吃掉手指）
     const L = { uz: .34, ux: -.1, fz: .06, fx: -.6 }, R = { uz: -.34, ux: -.1, fz: -.06, fx: -.6 };
+    phone.visible = p === 'phone';
+    if (phone.visible) {
+      R.uz=-.86; R.ux=-.62; R.fx=-2.24; R.fz=.42;
+      phone.position.copy(pinchPoint()); phone.rotation.z=.22;
+    }
     if (p === 'wave') { L.uz = 2.45 + Math.sin(t * 11) * .3; L.ux = -.2; L.fz = .45 + Math.sin(t * 11 + 1) * .35; L.fx = 0; }
     if (p === 'reach') { L.uz = 2.75; L.ux = -.35; L.fz = .1; R.uz = -.6; R.ux = -.4; }
     if (p === 'pet') { R.ux = -1.15 + Math.sin(t * 8) * .1; R.uz = -.25; R.fx = -.5; }
@@ -352,7 +360,7 @@ export function createPrincess(THREE, gltfScene) {
     // 手勢
     const hk = 1 - Math.exp(-dt * 10);
     const gL = { wave: 'open', reach: 'open', cheer: 'fist' }[p] || 'relax';
-    const gR = { pet: 'open', reach: 'open', water: 'pinch', thumb: 'thumb', cheer: 'fist' }[p] || 'relax';
+    const gR = { phone:'pinch', pet: 'open', reach: 'open', water: 'pinch', thumb: 'thumb', cheer: 'fist' }[p] || 'relax';
     applyHand('L', HAND[gL], hk); applyHand('R', HAND[gR], hk);
     // 澆水器：把手頂端放在捏住的點，壺嘴朝角色正前方，澆水時一前一後地傾斜
     can.visible = p === 'water';

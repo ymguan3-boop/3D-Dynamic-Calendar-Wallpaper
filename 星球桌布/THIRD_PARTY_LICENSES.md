@@ -20,3 +20,5 @@
   - 語音合成使用 Windows 已安裝的本機聲線（Microsoft Hanhan、Yating、Zhiwei），屬於作業系統的一部分。
   - 選用的 Edge 裝置端模型（Prompt API）由 Edge 提供。本程式不會觸發它下載。
   - 選用的雲端閘道（`ai/cloud-gateway/`）由使用者自行部署。
+
+本版調整 vosk-browser 內嵌 worker 的 Emscripten 函式命名及 Embind／Emval 呼叫器，以具名閉包取代動態產生程式碼，供本機內容安全政策下使用。

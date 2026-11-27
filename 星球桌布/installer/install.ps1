@@ -1,4 +1,5 @@
-# 小公主的星球（星球桌布）— 安裝程式
+﻿# 小公主的星球（星球桌布）— 安裝程式
+param([switch]$Quiet)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 $Src  = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -38,7 +39,6 @@ try {
     Copy-Item (Join-Path $Src 'princess-chat.html') (Join-Path $Dest 'princess-chat.html') -Force
     foreach ($d in 'ai\lib', 'ai\models', 'ai\licenses') {
       $to = Join-Path $Dest $d
-      Remove-Item $to -Recurse -Force -ErrorAction SilentlyContinue
       New-Item -ItemType Directory -Force $to | Out-Null
       Copy-Item (Join-Path $Src "$d\*") $to -Recurse -Force
     }
@@ -109,7 +109,7 @@ public static class Program {
   $removeIcon = (Join-Path $icons 'remove.ico') + ',0'
   $desktop = [Environment]::GetFolderPath('Desktop')
   $menu = Join-Path ([Environment]::GetFolderPath('Programs')) '星球桌布'
-  Remove-Item $menu -Recurse -Force -ErrorAction SilentlyContinue
+  if (!$HasAi) { Remove-Item -LiteralPath (Join-Path $menu '和小公主說話.lnk') -ErrorAction SilentlyContinue }
   New-Item -ItemType Directory -Force $menu | Out-Null
   New-Shortcut (Join-Path $menu '啟動星球桌布.lnk') $launcher 'start' '把小公主的星球設為桌布' $startIcon
   New-Shortcut (Join-Path $menu '停止星球桌布.lnk') $launcher 'stop' '停止動態桌布，回到原本的桌布' $stopIcon
@@ -121,14 +121,15 @@ public static class Program {
 
   Start-Process $launcher -ArgumentList 'start'
 
-  [System.Windows.Forms.MessageBox]::Show(
+  if (!$Quiet) { [System.Windows.Forms.MessageBox]::Show(
     "安裝完成！桌布會在幾秒內出現，並自動配合螢幕大小。`n`n" +
     "・桌面上的「$ManagerName」可以新增居民、管理行事曆，並選擇桌布顯示在主螢幕、副螢幕或同時顯示`n" +
     "・開機時會自動啟動`n" +
-    $(if ($HasAi) { "・按 Ctrl+Alt+P 或開始功能表「和小公主說話」可以用文字或語音和小公主對話（完全離線）`n" } else { '' }) +
+    $(if ($HasAi) { "・按 Ctrl+Alt+P 或開始功能表「和小公主說話」可以用文字或語音和小公主對話（可選本機或 Groq AI）`n" } else { '' }) +
     "・開始功能表 →「星球桌布」可以停止或解除安裝",
-    $Title, 'OK', 'Information') | Out-Null
+    $Title, 'OK', 'Information') | Out-Null }
 } catch {
+  if ($Quiet) { throw }
   [System.Windows.Forms.MessageBox]::Show("安裝失敗：$($_.Exception.Message)", $Title, 'OK', 'Error') | Out-Null
   exit 1
 }

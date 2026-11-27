@@ -24,7 +24,11 @@ public static class PlanetAi {
 
   // ---------- policy (machine first, then user); front-end parameters cannot change these ----------
   public static bool LockOfficial = false, AllowDevice = false, AllowCloud = false;
-  public static string CloudUrl = "";
+  const string GroqUrl = "https://api.groq.com/openai/v1/chat/completions";
+  static string KeyFile { get { return Path.Combine(root, "groq-key.dat"); } }
+  static bool HasKey { get { return File.Exists(KeyFile); } }
+  static int voiceRequested;
+  static DateTime lastChatPoll;
   // The regular wallpaper package has no chat page: the AI routes then stay off (only /ai/status answers).
   public static bool Enabled = false;
   static Dictionary<string, object> settings = new Dictionary<string, object>();
@@ -39,12 +43,10 @@ public static class PlanetAi {
     root = dir; logFile = Path.Combine(dir, "ai-log.txt");
     Enabled = File.Exists(Path.Combine(dir, "princess-chat.html"));
     LockOfficial = lockOfficial; AllowDevice = allowDevice; AllowCloud = allowCloud;
-    CloudUrl = (cloudUrl ?? "").Trim();
-    if (CloudUrl.Length > 0 && !Regex.IsMatch(CloudUrl, "^https://[A-Za-z0-9.-]+(/[A-Za-z0-9._~/-]*)?$")) CloudUrl = "";
     TrimLog(14);
     LoadSettings();
     MigrateData();
-    Log("service.start lock=" + (LockOfficial ? 1 : 0) + " device=" + (AllowDevice ? 1 : 0) + " cloud=" + (AllowCloud ? 1 : 0) + " cloudUrl=" + (CloudUrl.Length > 0 ? 1 : 0));
+    Log("service.start lock=" + (LockOfficial ? 1 : 0) + " device=" + (AllowDevice ? 1 : 0) + " cloud=" + (AllowCloud ? 1 : 0) + " cloudUrl=" + (HasKey ? 1 : 0));
   }
 
   // ---------- logging: time + status code only ----------
@@ -194,7 +196,7 @@ public static class PlanetAi {
   static void SaveSettings() { try { File.WriteAllText(SettingsFile, json.Serialize(settings), new UTF8Encoding(false)); } catch { } }
   static void EnforcePolicy() {
     string m = Str("mode");
-    if (LockOfficial || m == "device" && !AllowDevice || m == "personal" && !(AllowCloud && CloudUrl.Length > 0 && Bool("cloudConsent")) ||
+    if (LockOfficial || m == "device" || m == "personal" && !(AllowCloud && HasKey && Bool("cloudConsent")) ||
         (m != "official" && m != "device" && m != "personal")) settings["mode"] = "official";
   }
   public static string Mode { get { lock (sync) return Str("mode"); } }
@@ -203,14 +205,14 @@ public static class PlanetAi {
   static string speech = "{\"seq\":0}";
   static int chatRequested;
   public static bool TakeChatRequest() { return System.Threading.Interlocked.Exchange(ref chatRequested, 0) == 1; }
-  public static void RequestChat() { System.Threading.Interlocked.Exchange(ref chatRequested, 1); }
+  public static void RequestChat() { System.Threading.Interlocked.Exchange(ref voiceRequested, 1); System.Threading.Interlocked.Exchange(ref chatRequested, 1); }
 
   // ---------- calendar proposals ----------
   sealed class Proposal { public string RequestId, Op, EventJson, Id; public int Rev; public DateTime Expires; }
   static readonly Dictionary<string, Proposal> proposals = new Dictionary<string, Proposal>();
   static readonly Dictionary<string, DateTime> committed = new Dictionary<string, DateTime>();
   static readonly string[] Emotions = { "idle", "blink", "happy", "talk", "shy", "star", "sad", "wow" };
-  static readonly string[] PostRoutes = { "/ai/calendar/propose", "/ai/calendar/commit", "/ai/speech", "/ai/open-chat", "/ai/mode", "/ai/settings", "/ai/log/clear", "/ai/cloud" };
+  static readonly string[] PostRoutes = { "/ai/calendar/propose", "/ai/calendar/commit", "/ai/speech", "/ai/open-chat", "/ai/groq-key", "/ai/voice", "/ai/mode", "/ai/settings", "/ai/log/clear", "/ai/cloud" };
   static readonly string[] Gestures ={ "", "wave", "pet", "reach", "water", "stars", "thumb", "cheer", "sit" };
 
   static Dictionary<string, object> Calendar(out int rev) {
@@ -311,7 +313,7 @@ public static class PlanetAi {
         return AiResponse.Json(200, "{\"enabled\":" + (Enabled ? "true" : "false") + ",\"mode\":\"" + Str("mode") + "\",\"locked\":" + (LockOfficial ? "true" : "false") +
           ",\"deviceAllowed\":" + (AllowDevice && !LockOfficial ? "true" : "false") +
           ",\"cloudAllowed\":" + (AllowCloud && !LockOfficial ? "true" : "false") +
-          ",\"cloudConfigured\":" + (CloudUrl.Length > 0 ? "true" : "false") +
+          ",\"cloudConfigured\":" + (HasKey ? "true" : "false") +
           ",\"hotkeyActive\":" + (Hotkey.Active ? "true" : "false") +
           ",\"settings\":" + json.Serialize(PublicSettings()) + "}");
       }
@@ -337,7 +339,7 @@ public static class PlanetAi {
     if (Array.IndexOf(PostRoutes, path) < 0 && path != "/ai/feed") return AiResponse.Json(404, Err(404, "not_found"));
     if (method != "POST" && path != "/ai/feed") return AiResponse.Json(405, Err(405, "method"));
     if (path == "/ai/feed") {
-      lock (sync) return AiResponse.Json(200, "{\"speech\":" + speech + ",\"subtitles\":" + (Bool("subtitles") ? "true" : "false") + ",\"maskTitles\":" + (Bool("maskTitles") ? "true" : "false") + "}");
+      lock (sync) return AiResponse.Json(200, "{\"onPhone\":" + ((DateTime.UtcNow - lastChatPoll).TotalSeconds < 4 ? "true" : "false") + ",\"speech\":" + speech + ",\"subtitles\":" + (Bool("subtitles") ? "true" : "false") + ",\"maskTitles\":" + (Bool("maskTitles") ? "true" : "false") + "}");
     }
     var body = Parse(readBody(16384));
     if (body == null) return AiResponse.Json(400, Err(400, "bad_json"));
@@ -355,13 +357,24 @@ public static class PlanetAi {
       lock (sync) speech = json.Serialize(d);
       return AiResponse.Json(200, "{\"ok\":true}");
     }
-    if (path == "/ai/open-chat") { System.Threading.Interlocked.Exchange(ref chatRequested, 1); return AiResponse.Json(200, "{\"ok\":true}"); }
+    if (path == "/ai/voice") {
+      lock (sync) lastChatPoll = DateTime.UtcNow;
+      return AiResponse.Json(200, "{\"start\":" + (System.Threading.Interlocked.Exchange(ref voiceRequested, 0) == 1 ? "true" : "false") + "}");
+    }
+    if (path == "/ai/groq-key") {
+      if (!AllowCloud || LockOfficial) return AiResponse.Json(403, Err(403,"locked_by_policy"));
+      string key = (S(body,"key") ?? "").Trim();
+      if (!Regex.IsMatch(key, @"^gsk_[A-Za-z0-9_-]{12,240}$")) return AiResponse.Json(400, Err(400,"bad_key"));
+      try { lock(sync) WriteProtected(KeyFile,key); } catch { return AiResponse.Json(500, Err(500,"save_failed")); }
+      return AiResponse.Json(200,"{}");
+    }
+    if (path == "/ai/open-chat") { RequestChat(); return AiResponse.Json(200, "{\"ok\":true}"); }
     if (path == "/ai/mode") {
       string mode = S(body, "mode"); object consent; bool agreed = body.TryGetValue("consent", out consent) && consent is bool && (bool)consent;
       lock (sync) {
         if (LockOfficial && mode != "official") { Log("mode.denied locked"); return AiResponse.Json(403, Err(403, "locked_by_policy")); }
-        if (mode == "device" && !AllowDevice) { Log("mode.denied device"); return AiResponse.Json(403, Err(403, "device_not_allowed")); }
-        if (mode == "personal" && !(AllowCloud && CloudUrl.Length > 0)) { Log("mode.denied cloud"); return AiResponse.Json(403, Err(403, "cloud_not_enabled")); }
+        if (mode == "device") { Log("mode.denied device"); return AiResponse.Json(403, Err(403, "device_not_allowed")); }
+        if (mode == "personal" && !(AllowCloud && HasKey)) { Log("mode.denied cloud"); return AiResponse.Json(403, Err(403, "cloud_not_enabled")); }
         if (mode == "personal" && !agreed) return AiResponse.Json(400, Err(400, "consent_required"));
         if (mode != "official" && mode != "device" && mode != "personal") return AiResponse.Json(400, Err(400, "bad_mode"));
         settings["mode"] = mode; if (mode == "personal") settings["cloudConsent"] = true; SaveSettings();
@@ -392,26 +405,32 @@ public static class PlanetAi {
 
   // ---------- L3 cloud gateway (optional; disabled unless policy allows, a gateway URL is set and the user consented) ----------
   static AiResponse Cloud(Dictionary<string, object> body) {
-    string url, install;
+    string key;
     lock (sync) {
       EnforcePolicy();
-      if (Str("mode") != "personal" || !AllowCloud || LockOfficial || CloudUrl.Length == 0) { Log("cloud.blocked"); return AiResponse.Json(403, Err(403, "cloud_disabled")); }
-      url = CloudUrl; install = Str("install");
+      if (Str("mode") != "personal" || !AllowCloud || LockOfficial || !HasKey) { Log("cloud.blocked"); return AiResponse.Json(403, Err(403, "cloud_disabled")); }
+      try { key = ReadProtected(KeyFile); } catch { return AiResponse.Json(503, Err(503,"key_unavailable")); }
     }
     string text = S(body, "text") ?? "";
     if (text.Length < 1 || text.Length > 500) return AiResponse.Json(400, Err(400, "bad_text"));
     // only the single question is sent: no history, no calendar, no local state
-    string payload = "{\"text\":" + json.Serialize(text) + ",\"install\":\"" + install + "\"}";
+    string payload = json.Serialize(new { model = "llama-3.3-70b-versatile", max_completion_tokens = 240, messages = new[] {
+      new { role = "system", content = "你是星球上的小公主，請用自然溫柔的臺灣繁體中文回答一到兩句，適合朗讀。不要編造行程。" },
+      new { role = "user", content = text } } });
     for (int attempt = 0; attempt < 2; attempt++) {
       try {
-        var req = (System.Net.HttpWebRequest)System.Net.WebRequest.Create(url);
+        var req = (System.Net.HttpWebRequest)System.Net.WebRequest.Create(GroqUrl);
+        req.Headers["Authorization"] = "Bearer " + key;
         req.Method = "POST"; req.ContentType = "application/json"; req.Timeout = 15000; req.ReadWriteTimeout = 15000; req.AllowAutoRedirect = false;
         byte[] data = Encoding.UTF8.GetBytes(payload);
         using (var s = req.GetRequestStream()) s.Write(data, 0, data.Length);
         using (var res = (System.Net.HttpWebResponse)req.GetResponse())
         using (var reader = new StreamReader(res.GetResponseStream(), Encoding.UTF8)) {
-          char[] buf = new char[8192]; int n = reader.Read(buf, 0, buf.Length);
-          var answer = Parse(new string(buf, 0, n)); string reply = S(answer, "reply");
+          var answer = Parse(reader.ReadToEnd());
+          var choices = answer == null || !answer.ContainsKey("choices") ? null : answer["choices"] as System.Collections.IList;
+          var first = choices == null || choices.Count == 0 ? null : choices[0] as Dictionary<string,object>;
+          var msg = first == null || !first.ContainsKey("message") ? null : first["message"] as Dictionary<string,object>;
+          string reply = msg == null ? null : S(msg,"content");
           if (reply == null) { Log("cloud.bad_reply"); return AiResponse.Json(502, Err(502, "bad_reply")); }
           if (reply.Length > 600) reply = reply.Substring(0, 600);
           Log("cloud.ok");

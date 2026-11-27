@@ -107,3 +107,8 @@
 }
 .calendar-export p, [data-export-status] { margin: 7px 0; color: #755b44; font-size: 12px; }
 [data-export-status]:empty { display: none; }
+
+[data-entry="chat"] { --entry-art:url("entry-chat.png"); }
+[data-entry="display"] { --entry-art:url("entry-display.png"); }
+[data-entry="residents"] { --entry-art:url("entry-residents.png"); }
+[data-entry="calendar"] { --entry-art:url("entry-calendar.png"); }

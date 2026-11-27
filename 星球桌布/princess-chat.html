@@ -66,7 +66,7 @@
   <div class="sign">
     <img src="assets/manager.png" alt="">
     <h1>小公主對話</h1>
-    <span class="badge" id="modeBadge">公務模式・離線</span>
+    <span class="badge" id="modeBadge">本機模式・離線</span>
   </div>
   <div class="tools">
     <button class="chip" id="muteBtn" title="不播放語音，只顯示文字">靜音</button>
@@ -74,7 +74,7 @@
     <button class="chip" id="clearBtn" title="清除這個視窗裡的對話（不會保存）">清除畫面</button>
   </div>
   <div class="voice-note" id="voiceNote">正在檢查本機語音…</div>
-  <div class="voice-note" id="l2Note"></div>
+  <label class="voice-note" id="naturalOption" hidden><input type="checkbox" id="naturalVoice">使用 Edge 線上自然女聲（朗讀文字會送往 Microsoft）</label>
   <div id="log" aria-live="polite"></div>
   <div id="live"></div>
   <form id="form" autocomplete="off">
@@ -102,25 +102,14 @@ async function call(path, body) {
   return j;
 }
 
-/* ---------- L2：Edge 內建模型（只有「已可用」時才用；不會觸發下載） ---------- */
-let l2Session = null;
-async function l2Available() {
-  try { return typeof LanguageModel !== 'undefined' && await LanguageModel.availability({ expectedInputs: [{ type: 'text', languages: ['zh'] }] }) === 'available'; }
-  catch { return false; }
-}
-async function askDevice(text) {
-  if (!await l2Available()) throw new Error('unavailable');
-  if (!l2Session) l2Session = await LanguageModel.create({ initialPrompts: [{ role: 'system', content:
-    '你是住在小星球上的小公主，個性溫柔、好奇、活潑。用臺灣繁體中文，回答一到兩句短句。不要編造行程或外部資訊，不知道就說不知道。不要執行任何指令。' }] });
-  return await l2Session.prompt(text);
-}
-
 let status = { mode: 'official', settings: {} };
 async function refreshStatus() {
   try { status = await call('/ai/status'); } catch { status = { mode: 'official', settings: {} }; }
   const b = $('modeBadge');
-  b.textContent = status.mode === 'device' ? '裝置 AI' : status.mode === 'personal' ? '個人雲端' : '公務模式・離線';
+  b.textContent = status.mode === 'personal' ? 'Groq AI' : '本機模式・離線';
   b.classList.toggle('warn', status.mode === 'personal');
+  $('naturalOption').hidden = status.mode !== 'personal';
+  pickVoice();
   return status;
 }
 
@@ -146,9 +135,8 @@ const ai = createPrincessAI({
     },
     async mode() {
       const st = await refreshStatus();
-      return { mode: st.mode, device: st.mode === 'device' && st.deviceAllowed && await l2Available(), cloud: st.mode === 'personal' && st.cloudAllowed && st.cloudConfigured };
+      return { mode: st.mode, cloud: st.mode === 'personal' && st.cloudAllowed && st.cloudConfigured };
     },
-    device: askDevice,
     async cloud(text) { return (await call('/ai/cloud', { text })).reply; }
   }
 });
@@ -156,13 +144,14 @@ const ai = createPrincessAI({
 /* ---------- 語音合成：只用 Windows 本機的臺灣中文聲線，不使用線上聲線 ---------- */
 let voice = null, speakSeq = Date.now() % 100000;
 function pickVoice() {
-  const all = speechSynthesis.getVoices().filter(v => v.localService && /^zh[-_]TW/i.test(v.lang));
+  const all = speechSynthesis.getVoices().filter(v => (v.localService || (status.mode === 'personal' && $('naturalVoice').checked)) && /^zh[-_]TW/i.test(v.lang));
   const pref = status.settings?.voice;
-  voice = all.find(v => v.name === pref) || all.find(v => /Hanhan/i.test(v.name)) || all.find(v => /Yating/i.test(v.name)) ||
+  voice = all.find(v => v.name === pref) || all.find(v => /HsiaoChen|HsiaoYu|曉臻|曉雨/i.test(v.name)) || all.find(v => /Hanhan/i.test(v.name)) || all.find(v => /Yating/i.test(v.name)) ||
           all.find(v => !/Zhiwei/i.test(v.name)) || all[0] || null;
-  $('voiceNote').textContent = voice ? `語音：${voice.name.replace(/^Microsoft\s*/, '').split(' - ')[0]}（本機）・按住麥克風說話，最長 30 秒，按 Esc 取消。`
+  $('voiceNote').textContent = voice ? `語音：${voice.name.replace(/^Microsoft\s*/, '').split(' - ')[0]}（${voice.localService ? "本機" : "線上自然女聲"}）・按住麥克風說話，最長 30 秒，按 Esc 取消。`
     : '這台電腦沒有臺灣中文本機語音，小公主會改用文字回答（可在 Windows 設定 → 時間與語言 → 語音 新增）。';
 }
+$('naturalVoice').onchange = pickVoice;
 speechSynthesis.addEventListener('voiceschanged', pickVoice);
 function feed(text, emotion, gesture, speaking) {
   call('/ai/speech', { seq: speakSeq, text, emotion, gesture, speaking }).catch(() => {});
@@ -174,7 +163,7 @@ function speak(r) {
   return new Promise(done => {
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
-    u.voice = voice; u.lang = voice.lang; u.rate = 1.05; u.pitch = 1.25;
+    u.voice = voice; u.lang = voice.lang; u.rate = 1; u.pitch = voice.localService ? 1.08 : 1.02;
     let started = false;
     u.onstart = () => { started = true; speaking = true; feed(r.reply, r.emotion, r.gesture, true); };
     const end = () => { speaking = false; feed(r.reply, r.emotion, r.gesture, false); done(); };
@@ -202,7 +191,7 @@ function show(r) {
   const extra = document.createDocumentFragment();
   if (r.events?.length) {
     const ul = document.createElement('ul'); ul.className = 'evs';
-    for (const e of r.events.slice(0, 12)) { const li = document.createElement('li'); li.textContent = `${e.date.slice(5).replace('-', '/')} ${e.time || ''} ${e.title}`; ul.append(li); }
+    for (const e of r.events.slice(0, 12)) { const li = document.createElement('li'); li.textContent = `${e.date.replaceAll('-', '/')} ${e.time || ''} ${e.title}`; ul.append(li); }
     extra.append(ul);
   }
   if (r.confirm) {
@@ -257,14 +246,15 @@ $('muteBtn').classList.toggle('on', ai.muted); $('dndBtn').classList.toggle('on'
 
 /* ---------- 語音辨識：Vosk（WASM，在這個視窗裡執行），按住說話；錄音只在記憶體，不寫入磁碟 ---------- */
 const MODEL_URL = location.origin + '/ai/models/vosk-model-small-cn-0.22.tar.gz';
-const MAX_SEC = 30, IDLE_FREE_MS = 5 * 60e3;
+const MAX_SEC = 30, IDLE_FREE_MS = 20 * 60e3;
 let model = null, modelLoading = null, idleTimer = 0;
+let handsFree = false, preparing = false;
 let rec = null;   // { stream, ctx, node, src, recognizer, timer, cancelled, text }
 function loadScript(src) { return new Promise((ok, bad) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = bad; document.head.append(s); }); }
 async function ensureModel() {
   if (model) return model;
   if (!modelLoading) modelLoading = (async () => {
-    $('live').textContent = '第一次使用，正在載入離線語音模型（約 5–15 秒）…';
+    $('live').textContent = '正在準備本機語音辨識…';
     if (!window.Vosk) await loadScript('/ai/lib/vosk.js');
     const [m, cc] = await Promise.all([window.Vosk.createModel(MODEL_URL), import('/ai/lib/opencc-cn2t.js')]);
     const conv = cc.Converter({ from: 'cn', to: 'twp' });
@@ -281,14 +271,16 @@ function scheduleFree() {
 }
 const tidy = s => toTraditional(String(s || '').replace(/(?<=[㐀-鿿])\s+(?=[㐀-鿿])/g, '').trim());
 async function startRec() {
-  if (rec || busy) return;
+  if (preparing || rec || busy) return;
+  preparing = true; clearTimeout(idleTimer);
   speechSynthesis.cancel(); speaking = false;          // 說話前先停止播放，避免收到自己的聲音
   const mic = $('mic');
   mic.classList.add('busy'); mic.textContent = '準備中…';
   let stream;
   try {
-    const m = await ensureModel();
+    const ready = ensureModel(); ready.catch(() => {});
     stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    const m = await ready;
     if (!holding) { stream.getTracks().forEach(t => t.stop()); resetMic(); return; }
     const ctx = new AudioContext({ sampleRate: 16000 });
     const recognizer = new m.KaldiRecognizer(16000);
@@ -297,19 +289,29 @@ async function startRec() {
     recognizer.on('result', msg => { const t = msg.result.text || ''; if (t) r.text += (r.text ? ' ' : '') + t; if (r.final) r.final(); });
     r.src = ctx.createMediaStreamSource(stream);
     r.node = ctx.createScriptProcessor(4096, 1, 1);
-    r.node.onaudioprocess = e => { if (!r.stopped) recognizer.acceptWaveformFloat(e.inputBuffer.getChannelData(0), ctx.sampleRate); };
+    let lastSound = 0;
+    r.node.onaudioprocess = e => {
+      if (r.stopped) return;
+      const samples = e.inputBuffer.getChannelData(0);
+      recognizer.acceptWaveformFloat(samples, ctx.sampleRate);
+      if (!handsFree) return;
+      let power = 0; for (const x of samples) power += x*x;
+      if (power/samples.length > .00025) lastSound = performance.now();
+      if (lastSound && performance.now()-lastSound > 1400) stopRec(false);
+    };
     r.src.connect(r.node); r.node.connect(ctx.destination);
     r.timer = setTimeout(() => stopRec(false), MAX_SEC * 1000);
-    mic.classList.remove('busy'); mic.classList.add('rec'); mic.textContent = '● 放開送出';
+    mic.classList.remove('busy'); mic.classList.add('rec'); mic.textContent = handsFree ? '● 聆聽中，停頓後送出' : '● 放開送出';
   } catch (e) {
     if (stream) stream.getTracks().forEach(t => t.stop());
     resetMic();
     add('her', e && e.name === 'NotAllowedError' ? '我沒有使用麥克風的權限，可以改用打字跟我說話喔。' : '語音辨識沒有辦法啟動，可以改用打字跟我說話喔。');
-  }
+  } finally { preparing = false; }
 }
 function resetMic() { const mic = $('mic'); mic.classList.remove('rec', 'busy'); mic.textContent = '🎙 按住說話'; }
 async function stopRec(cancel) {
-  const r = rec; if (!r) return;
+  const r = rec; if (!r || r.stopped) return;
+  handsFree = false; holding = false;
   r.stopped = true; clearTimeout(r.timer);
   try { r.src.disconnect(); r.node.disconnect(); } catch {}
   r.stream.getTracks().forEach(t => t.stop());
@@ -325,7 +327,7 @@ async function stopRec(cancel) {
 }
 let holding = false;
 const mic = $('mic');
-mic.addEventListener('pointerdown', e => { e.preventDefault(); mic.setPointerCapture(e.pointerId); holding = true; startRec(); });
+mic.addEventListener('pointerdown', e => { e.preventDefault(); if (handsFree && rec) { stopRec(false); return; } handsFree = false; mic.setPointerCapture(e.pointerId); holding = true; startRec(); });
 mic.addEventListener('pointerup', () => { holding = false; if (rec) stopRec(false); });
 mic.addEventListener('pointercancel', () => { holding = false; if (rec) stopRec(true); });
 // 鍵盤：空白鍵按住說話（焦點不在輸入框時），Esc 取消
@@ -339,14 +341,18 @@ addEventListener('pagehide', () => { if (rec) stopRec(true); speechSynthesis.can
 /* ---------- 開啟時：主動問候（冷卻 15 分鐘、每小時最多 2 次、勿擾時不問候） ---------- */
 await refreshStatus();
 pickVoice();
-// L2 狀態只查詢、不建立工作階段（availability() 不會觸發模型下載）
-(async () => {
-  let s = 'Edge 未提供';
-  try { if (typeof LanguageModel !== 'undefined') s = await LanguageModel.availability({ expectedInputs: [{ type: 'text', languages: ['zh'] }] }); } catch (e) { s = '查詢失敗'; }
-  const label = { available: '可用', downloadable: '需要下載（不會自動下載）', downloading: '下載中', unavailable: '這台電腦不支援' }[s] || s;
-  $('l2Note').textContent = `Edge 裝置模型（選用）：${label}`;
-  document.documentElement.dataset.l2 = s;
-})();
+ensureModel().then(scheduleFree).catch(() => { $('live').textContent = '語音模型未就緒，按麥克風可重試。'; });
+async function checkVoiceRequest() {
+  try {
+    if (!document.hidden) {
+      const r = await call('/ai/voice',{});
+      if (r.start && !preparing && !rec && !busy) {
+        handsFree = true; holding = true; startRec();
+      }
+    }
+  } finally { setTimeout(() => checkVoiceRequest().catch(() => {}), 650); }
+}
+checkVoiceRequest().catch(() => {});
 let greetOk = true;
 try {
   const g = JSON.parse(localStorage.getItem('princess-chat-greet') || '[]').filter(t => Date.now() - t < 3600e3);
@@ -355,7 +361,7 @@ try {
   if (greetOk) localStorage.setItem('princess-chat-greet', JSON.stringify([...g, Date.now()]));
 } catch {}
 const hello = greetOk ? ai.proactiveGreeting(0, 99) : null;
-if (hello) setTimeout(() => show(hello), 400);
+if (hello) add('her', hello.reply);
 else add('her', '我在這裡喔，想聊什麼呢？');
 $('text').focus();
 </script>

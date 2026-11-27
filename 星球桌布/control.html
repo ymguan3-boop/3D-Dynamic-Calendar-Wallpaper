@@ -127,7 +127,7 @@
   .opt:disabled{opacity:.45;cursor:not-allowed;background:var(--cream)}
   .badge{font-size:10.5px;padding:2px 8px;border-radius:999px;background:var(--sage);color:#fbfff4;letter-spacing:.08em;white-space:nowrap}
   .badge.off{background:#b9a48a}
-</style>
+[hidden]{display:none!important} #home{display:grid;grid-template-columns:repeat(2,1fr);gap:12px} #home button{padding:16px 6px;font:inherit;font-weight:bold;color:#70422c;border:1px solid #cba87c;border-radius:14px;background:#fff8e9;box-shadow:0 3px #dbc4a0;cursor:pointer} #home button:hover{background:#f8ecd3} #home button::before{content:"";display:block;height:72px;background:var(--entry-art) center/contain no-repeat;margin-bottom:6px} #backHome{margin-bottom:10px}.key-tools{display:grid;gap:7px;margin:12px 0}.key-tools a{color:#70422c}</style>
 </head>
 <body>
   <div class="sign">
@@ -136,20 +136,21 @@
   </div>
   <div class="status"><span class="dot" id="dot"></span><span id="st">尋找桌布中…</span></div>
 
-  <section class="card" id="aiCard">
-    <div class="ttl">和小公主說話 <small id="aiMode">公務模式・完全離線</small></div>
+  <nav id="home" aria-label="功能選單"></nav><button class="btn cream" id="backHome" hidden>‹ 返回功能選單</button><section class="card" id="aiCard" hidden>
+    <div class="ttl">和小公主說話 <small id="aiMode">本機模式・完全離線</small></div>
     <div class="row" style="margin-top:0">
-      <button class="btn red" id="aiOpen">開啟對話視窗</button>
+      <button class="btn red" id="aiOpen">開啟語音對話</button>
     </div>
-    <div class="note">也可以按快速鍵 <b id="aiHotkeyShow">Ctrl+Alt+P</b> 開啟。文字與語音都在這台電腦上處理，不連網路；新增、修改或刪除行程前一定會先請你確認。</div>
+    <div class="note">也可以按快速鍵 <b id="aiHotkeyShow">Ctrl+Alt+P</b> 開啟。也可以點擊桌布上的小公主。新增、修改或刪除行程前一定會先請你確認。</div>
     <div class="seg" style="margin-top:12px">
-      <button class="opt" data-mode="official">公務模式<small>本機規則</small></button>
-      <button class="opt" data-mode="device" disabled>裝置 AI<small id="devNote">未開放</small></button>
-      <button class="opt" data-mode="personal" disabled>個人雲端<small id="cloudNote">雲端未啟用</small></button>
+      <button class="opt" data-mode="official">本機模式<small>本機規則</small></button>
+
+      <button class="opt" data-mode="personal" disabled>Groq AI<small id="cloudNote">雲端未啟用</small></button>
     </div>
+    <div class="key-tools"><label for="groqKey">Groq API 金鑰</label><input id="groqKey" type="password" autocomplete="off" spellcheck="false" placeholder="gsk_…"><button class="btn cream" id="saveKey">儲存金鑰</button><a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">申請免費 Groq API 金鑰 ↗</a><small id="keyState" role="status"></small></div>
     <div class="ai-row"><label><input type="checkbox" id="aiSub">桌布顯示小公主的字幕</label></div>
     <div class="ai-row"><label><input type="checkbox" id="aiMask">桌面隱藏行程名稱（只顯示「行程」）</label></div>
-    <div class="ai-row"><label>開啟對話的快速鍵</label><input type="text" id="aiHotkey" maxlength="40" placeholder="Ctrl+Alt+P"><span class="badge" id="aiHotkeyState">已啟用</span></div>
+    <div class="ai-row"><label>開啟語音對話的快速鍵</label><input type="text" id="aiHotkey" maxlength="40" placeholder="Ctrl+Alt+P"><span class="badge" id="aiHotkeyState">已啟用</span></div>
     <div class="ai-row"><label>主動問候間隔（分鐘，至少 15）</label><input type="text" id="aiCool" maxlength="3" style="width:60px"></div>
     <div class="row">
       <button class="btn cream" id="aiSave">儲存對話設定</button>
@@ -158,7 +159,7 @@
     <div class="note">紀錄檔只記狀態、時間與錯誤代碼，不含對話內容，保留 14 天。</div>
   </section>
 
-  <section class="card green">
+  <section class="card green" id="displayCard" hidden>
     <div class="ttl" data-art="planet">桌布顯示螢幕</div>
     <div class="seg">
       <button class="opt" data-disp="primary" data-art="display-primary">主螢幕</button>
@@ -168,7 +169,7 @@
     <div class="note">切換後約 3 秒生效，桌布會自動配合各螢幕的解析度。只有一個螢幕時一律顯示在主螢幕。</div>
   </section>
 
-  <section class="card">
+  <section class="card" id="residentsCard" hidden>
     <div class="ttl" data-art="fox">星球居民</div>
     <div class="grid">
       <button class="tile" data-add="fox"><span>狐狸</span></button>
@@ -187,7 +188,7 @@
     <label class="slider">流星頻率 <input id="met" type="range" min="0" max="100" value="50"></label>
   </section>
 
-  <section class="card blue">
+  <section class="card blue" id="calendarCard" hidden>
     <div class="ttl" data-art="calendar">行事曆 <small>顯示在桌面正中間</small></div>
     <div class="mbar">
       <span class="lab">桌面月份</span>
@@ -201,7 +202,7 @@
     </div>
     <div class="mini" id="mini"></div>
     <div class="form">
-      <label>日期<input type="date" id="eDate"></label>
+      <label>日期<span class="export-date"><input type="date" id="eDate"><span class="export-date-format" aria-hidden="true">年/月/日</span></span></label>
       <label>時間（可不填）<input type="time" id="eTime"></label>
       <label class="wide">行程內容<input type="text" id="eTitle" maxlength="40" placeholder="例如：去花市買玫瑰"></label>
       <div class="wide swatches" id="sw">
@@ -368,7 +369,7 @@
     $('mName').textContent = `${y} 年 ${m + 1} 月`;
     $('mMode').textContent = c.view.mode === 'fixed' ? '固定顯示此月' : '自動跟隨當月';
     $('mMode').classList.toggle('fixed', c.view.mode === 'fixed');
-    $('eDate').value = sel;
+    $('eDate').value = sel; $('eDate').nextElementSibling.textContent = $('eDate').value.replaceAll('-', '/') || '年/月/日';
     const has = new Set(c.events.map(e => e.date));
     const mini = $('mini'); mini.replaceChildren();
     WD.forEach(w => { const h = document.createElement('div'); h.className = 'wd'; h.textContent = w; mini.append(h); });
@@ -392,7 +393,7 @@
       const row = document.createElement('div'); row.className = 'ev'; row.style.setProperty('--c', e.color || '#a8432f');
       const bar = document.createElement('span'); bar.className = 'bar';
       const when = document.createElement('div'); when.className = 'when';
-      when.textContent = `${d.getMonth() + 1}/${d.getDate()}（${WD[d.getDay()]}）` + (e.time ? `\n${e.time}` : '');
+      when.textContent = `${e.date.replaceAll('-', '/')}（${WD[d.getDay()]}）` + (e.time ? `\n${e.time}` : '');
       const what = document.createElement('div'); what.className = 'what'; what.textContent = e.title;
       const del = document.createElement('button'); del.className = 'del'; del.title = '刪除這個行程';
       del.setAttribute('aria-label', del.title); del.dataset.art = 'remove';
@@ -401,6 +402,7 @@
     }
   }
   render();
+$('eDate').addEventListener('input', e => { e.target.nextElementSibling.textContent = e.target.value.replaceAll('-', '/') || '年/月/日'; });
   initCalendarExport($('eExport'), () => loadCal().events);
   async function refreshManager() {
     try {
@@ -428,18 +430,40 @@
   /* ---------- 小公主對話設定 ---------- */
   const aiHeaders = { 'X-Planet-Session': PLANET_SESSION, 'Content-Type': 'application/json' };
   const aiPost = (path, body) => fetch(path, { method: 'POST', headers: aiHeaders, body: JSON.stringify(body || {}) });
-  const MODE_TEXT = { official: '公務模式・完全離線', device: '裝置 AI・Edge 內建模型', personal: '個人雲端・已同意' };
+  const entries = [['aiCard','對話','chat'],['displayCard','桌布顯示','display'],['residentsCard','星球居民','residents'],['calendarCard','行事曆','calendar']];
+  let activeEntry;
+  for (const [id,label,art] of entries) {
+    const b = document.createElement('button');
+    b.textContent = label; b.dataset.entry = art;
+    b.onclick = () => { activeEntry = b; $('home').hidden = true; $(id).hidden = false; $('backHome').hidden = false; $('backHome').focus(); };
+    $('home').append(b);
+  }
+  $('backHome').onclick = () => { for (const [id] of entries) $(id).hidden = true; $('backHome').hidden = true; $('home').hidden = false; activeEntry.focus(); };
+  const chatEntry = $('home').querySelector('[data-entry=chat]');
+  chatEntry.disabled = true;
+  $('saveKey').onclick = async () => {
+    try {
+      const input = $('groqKey');
+      const r = await aiPost('/ai/groq-key', {key:input.value.trim()});
+      if (!r.ok) throw Error();
+      input.value = ''; await loadAi(); toast('金鑰已加密儲存');
+    } catch { toast('無法儲存，請確認 Groq 金鑰及雲端政策'); }
+  };
+  const MODE_TEXT = { official: '本機模式・完全離線', device: '裝置 AI・Edge 內建模型', personal: 'Groq AI' };
   async function loadAi() {
     if (!HAS_SERVER) { $('aiCard').hidden = true; return; }
     try {
       const st = await (await fetch('/ai/status', { headers: aiHeaders, cache: 'no-store' })).json();
       if (!st.enabled) { $('aiCard').hidden = true; return; }
       $('aiMode').textContent = MODE_TEXT[st.mode] || MODE_TEXT.official + (st.locked ? '（政策鎖定）' : '');
-      if (st.locked) $('aiMode').textContent = '公務模式・已由組織政策鎖定';
+      if (st.locked) $('aiMode').textContent = '本機模式・已由組織政策鎖定';
       document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === st.mode));
-      const dev = document.querySelector('[data-mode=device]'), cloud = document.querySelector('[data-mode=personal]');
-      dev.disabled = !st.deviceAllowed; $('devNote').textContent = st.deviceAllowed ? '需本機模型已就緒' : '未開放';
-      cloud.disabled = !(st.cloudAllowed && st.cloudConfigured); $('cloudNote').textContent = cloud.disabled ? '雲端未啟用' : '需同意後使用';
+      chatEntry.disabled = false;
+      const cloud = document.querySelector('[data-mode=personal]');
+      cloud.disabled = !st.cloudAllowed || !st.cloudConfigured;
+      $('cloudNote').textContent = !st.cloudAllowed ? '政策鎖定' : st.cloudConfigured ? '可使用' : '請先儲存金鑰';
+      $('keyState').textContent = st.cloudConfigured ? '已加密儲存於本機' : '尚未設定金鑰';
+      $('saveKey').disabled = !st.cloudAllowed;
       const set = st.settings || {};
       $('aiSub').checked = set.subtitles !== false; $('aiMask').checked = !!set.maskTitles;
       $('aiHotkey').value = set.hotkey || 'Ctrl+Alt+P'; $('aiHotkeyShow').textContent = set.hotkey || 'Ctrl+Alt+P';
@@ -447,7 +471,7 @@
       $('aiHotkeyState').textContent = st.hotkeyActive ? '已啟用' : '被占用'; $('aiHotkeyState').classList.toggle('off', !st.hotkeyActive);
     } catch (e) { $('aiMode').textContent = '桌布沒有執行'; }
   }
-  $('aiOpen').onclick = async () => { try { const r = await aiPost('/ai/open-chat'); toast(r.ok ? '正在開啟對話視窗…' : '無法開啟'); } catch (e) { toast('桌布沒有執行'); } };
+  $('aiOpen').onclick = async () => { try { const r = await aiPost('/ai/open-chat'); toast(r.ok ? '正在開啟語音對話…' : '無法開啟'); } catch (e) { toast('桌布沒有執行'); } };
   $('aiSave').onclick = async () => {
     const cool = Math.max(15, Math.min(240, parseInt($('aiCool').value, 10) || 15));
     const r = await aiPost('/ai/settings', { subtitles: $('aiSub').checked, maskTitles: $('aiMask').checked, hotkey: $('aiHotkey').value.trim() || 'Ctrl+Alt+P', greetCooldown: cool });
@@ -458,15 +482,14 @@
   document.querySelectorAll('[data-mode]').forEach(b => b.onclick = async () => {
     const mode = b.dataset.mode;
     let consent = false;
-    if (mode === 'personal') consent = confirm('個人雲端模式會把「你問的那一句話」送到你部署的雲端閘道，不會送出行事曆或其他資料。
-公務電腦請勿使用。確定要開啟嗎？');
+    if (mode === 'personal') consent = confirm('需要雲端回答的問句將送往 Groq。語音辨識與行程操作保留在本機。確定啟用嗎？');
     if (mode === 'personal' && !consent) return;
     const r = await aiPost('/ai/mode', { mode, consent });
     toast(r.ok ? '已切換' : '這個模式目前不能使用');
     loadAi();
   });
   loadAi();
-  else addEventListener('storage', e => { if (e.key === CAL_KEY) render(); if (e.key === DISPLAY_KEY) showDisp(); });
+  if (!HAS_SERVER) addEventListener('storage', e => { if (e.key === CAL_KEY) render(); if (e.key === DISPLAY_KEY) showDisp(); });
 </script>
 </body>
 </html>

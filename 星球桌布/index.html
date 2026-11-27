@@ -204,7 +204,7 @@
       </div>
       <div class="mrow"><span class="mode" id="cMode"></span><button id="cNow">回到本月</button></div>
       <div class="cform">
-        <input type="date" id="cDate" title="日期">
+        <span class="export-date"><input type="date" id="cDate" title="日期"><span class="export-date-format" aria-hidden="true">年/月/日</span></span>
         <input type="time" id="cTime" title="時間（可不填）">
         <input type="text" id="cTitle" maxlength="40" placeholder="行程內容（按 Enter 加入）">
         <div class="sws" id="cSw">
@@ -563,6 +563,24 @@ function shadowAll(o) { o.traverse(m => { if (m.isMesh) { m.castShadow = true; }
 
 /* 障礙物（居民會繞開） */
 const OBST = [];
+
+// 小公主的圓石小屋
+{
+  const cottage = new THREE.Group(), dir = dirFrom(65, 48);
+  const wall = M(0xffdeb0), wood = M(0x87563b), roof = M(0xa44e43), glow = M(0xffda82);
+  cottage.add(mesh(new THREE.CylinderGeometry(.32,.35,.46,16),wall,0,.21,0));
+  cottage.add(mesh(new THREE.ConeGeometry(.45,.42,16),roof,0,.64,0));
+  cottage.add(mesh(new THREE.BoxGeometry(.095,.28,.09),wood,.2,.67,0));
+  cottage.add(mesh(new THREE.BoxGeometry(.14,.26,.05),wood,0,.13,.32));
+  cottage.add(sph(.015,glow,.045,.13,.353));
+  for (const side of [-1,1]) {
+    const window = mesh(new THREE.BoxGeometry(.1,.12,.025),glow,side*.21,.26,.25);
+    window.rotation.y=side*.68; cottage.add(window);
+    cottage.add(sph(.07,M(0x84945b),side*.26,.06,.21));
+  }
+  placeOn(cottage,dir,.35,-.02); shadowAll(cottage); planet.add(cottage);
+  OBST.push({dir,r:.46});
+}
 
 /* ---------- 火山 ---------- */
 const volcanoes = [];
@@ -1289,7 +1307,7 @@ function updPrince(dt, t) {
   prince.yaw = angLerp(prince.yaw, target, 1 - Math.exp(-dt * 2.2));
   prince.g.rotation.y = prince.yaw;
   if (prince.model) {
-    prince.model.update(dt, t, { pose: prince.pose, birdOnHead });   // 姿勢、手勢、表情、頭髮與緞帶
+    prince.model.update(dt, t, { pose: prince.onPhone ? "phone" : prince.pose, birdOnHead });   // 姿勢、手勢、表情、頭髮與緞帶
     if (prince.expressionAnchor.children.length) {
       // 跟隨皇冠的位置，坐下或低頭時，泡泡也留在頭頂附近。
       prince.model.J.crown.getWorldPosition(prince.expressionAnchor.position);
@@ -1412,20 +1430,23 @@ addEventListener('pointermove', e => {
 
 /* 點擊居民 / 小公主 */
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
-renderer.domElement.addEventListener('pointerdown', e => {
-  ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+function hitPlanet(x, y) {
+  ndc.set(x * 2 - 1, 1 - y * 2);
   ray.setFromCamera(ndc, camera);
   const hit = ray.intersectObject(planet, true).find(h => h.object.isMesh);
   if (!hit) return;
   let o = hit.object;
-  while (o && o !== planet) { if (o === prince.g) { princeReact(pick(['😊', '👋', '🌹', '⭐'])); return; } o = o.parent; }
+  while (o && o !== planet) { if (o === prince.g) {
+    if (desktopToken) fetch('/ai/open-chat', {method:'POST', headers:{'Content-Type':'application/json','X-Planet-Session':PLANET_SESSION}, body:'{}'}).catch(() => {});
+    princeReact(pick(['😊', '👋', '🌹', '⭐'])); return; } o = o.parent; }
   const cid = hit.object.userData.cid;
   const c = cid && creatures.find(x => x.id === cid);
   if (!c) return;
   if (c.kind === 'bird') { if (c.mode !== 'fly') takeoff(c); bubble(c.g, '♪', c.bh, .2); }
   else if (c.kind === 'fly') { c.swirl = 2; bubble(c.g, '✨', c.bh, .2); }
   else { releaseTarget(c); c.mode = 'play'; c.timer = 1.6; bubble(c.g, c.type === 'snake' ? '…' : '💕', c.bh); }
-});
+}
+renderer.domElement.addEventListener("pointerdown", e => { if (!desktopToken && e.button === 0) hitPlanet(e.clientX / innerWidth, e.clientY / innerHeight); });
 
 /* Lively Wallpaper 自訂屬性 */
 const livelyCal = { date: '', time: '', title: '', color: 0 };
@@ -1642,7 +1663,7 @@ function showCalDetails(trigger, pinned, index = 0) {
   detailIndex = index;
   const list = calTriggers.get(trigger), event = list[index];
   trigger.setAttribute('aria-expanded', String(pinned));
-  document.getElementById('calDetailsWhen').textContent = `${event.date} · ${event.time || '未指定時間'}`;
+  document.getElementById('calDetailsWhen').textContent = `${event.date.replaceAll('-', '/')} · ${event.time || '未指定時間'}`;
   calDetailsTitle.textContent = calShownTitle(event);
   calDetailsTitle.style.setProperty('--c', calEventColor(event));
   calDetailsNav.hidden = list.length < 2 || !pinned;
@@ -1714,7 +1735,11 @@ if (desktopToken) {
       if (!response.ok) throw new Error('Desktop input unavailable');
       const { point, click, serial } = await response.json();
       hoverCalTrigger(calTargetAt(point)?.closest('.cal-trigger') || null);
-      if (lastClick !== undefined && serial !== lastClick) activateCalTarget(calTargetAt(click));
+      if (lastClick !== undefined && serial !== lastClick && click) {
+        const target = calTargetAt(click);
+        activateCalTarget(target);
+        if (target === renderer.domElement) hitPlanet(click[0],click[1]);
+      }
       lastClick = serial;
     } catch {
       hoverCalTrigger(null);
@@ -1798,6 +1823,7 @@ if (desktopToken) {
       if (!r.ok) return;
       const f = await r.json();
       if (f.maskTitles !== maskTitles) { maskTitles = !!f.maskTitles; renderCal(true); }
+      prince.onPhone = !!f.onPhone;
       const sp = f.speech;
       if (!sp || typeof sp.seq !== 'number' || Date.now() - sp.at > 60000) return;
       if (sp.seq === lastSeq && sp.speaking === speakingNow) {
@@ -1869,7 +1895,8 @@ function addFromPanel() {
 cEl('cAdd').onclick = addFromPanel;
 initCalendarExport(cEl('cExport'), () => loadCal().events);
 cEl('cTitle').addEventListener('keydown', e => { if (e.key === 'Enter') addFromPanel(); });
-cEl('cDate').value = ymd(new Date());
+cEl('cDate').addEventListener('input', e => { e.target.nextElementSibling.textContent = e.target.value.replaceAll('-', '/') || '年/月/日'; });
+cEl('cDate').value = ymd(new Date()); cEl('cDate').nextElementSibling.textContent = cEl('cDate').value.replaceAll('-', '/') || '年/月/日';
 function renderCalEditor() {
   const c = loadCal(), [y, m] = calViewYM(c);
   cEl('cName').textContent = `${y} 年 ${m + 1} 月`;
@@ -1884,7 +1911,7 @@ function renderCalEditor() {
     const d = parseYmd(e.date);
     const row = document.createElement('div'); row.className = 'cev'; row.style.setProperty('--c', e.color || '#a8432f');
     const bar = document.createElement('span'); bar.className = 'bar';
-    const when = document.createElement('div'); when.className = 'when'; when.textContent = `${d.getMonth() + 1}/${d.getDate()}（${WD[d.getDay()]}）` + (e.time ? `\n${e.time}` : '');
+    const when = document.createElement('div'); when.className = 'when'; when.textContent = `${e.date.replaceAll('-', '/')}（${WD[d.getDay()]}）` + (e.time ? `\n${e.time}` : '');
     const what = document.createElement('div'); what.className = 'what'; what.textContent = e.title;
     const del = document.createElement('button'); del.className = 'del'; del.title = '刪除這個行程';
     del.setAttribute('aria-label', del.title); del.dataset.art = 'remove';
