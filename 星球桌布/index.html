@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>星球桌布</title>
+<title>小公主的星球</title>
 <style>
   :root{
     --ui-bg: rgba(14,16,38,.62);
@@ -120,6 +120,15 @@
 </script>
 <!-- 離線版建置時，three.js 原始碼會被嵌入下面這個區塊 -->
 <script type="text/plain" id="three-src">/*THREE_SRC*/</script>
+<script type="text/plain" id="bgu-src">/*BGU_SRC*/</script>
+<script type="text/plain" id="gltf-src">/*GLTF_SRC*/</script>
+<script type="text/plain" id="rig-src">/*RIG_SRC*/</script>
+<script type="text/plain" id="glb-src">/*GLB_B64*/</script>
+<!-- 開發版（未內嵌時）用的模組對應 -->
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+</script>
 </head>
 <body>
 <div id="err">星球載入失敗（three.js 未能載入）</div>
@@ -152,7 +161,7 @@
     </div>
     <label class="slider">自轉速度 <input id="spd" type="range" min="0" max="100" value="35"></label>
     <label class="slider">流星頻率 <input id="met" type="range" min="0" max="100" value="50"></label>
-    <div class="hint">點一下星球上的居民或星球旅人，可以和他們打招呼。居民會自己散步、相遇、打招呼，綿羊會去吃猴麵包樹苗。</div>
+    <div class="hint">點一下星球上的居民或小公主，可以和他們打招呼。居民會自己散步、相遇、打招呼，綿羊會去吃猴麵包樹苗。</div>
     </div>
     <div data-pane="cal" hidden>
       <div class="mbar">
@@ -181,11 +190,26 @@
 </div>
 
 <script type="module">
-// three.js：離線版從頁面內嵌的原始碼載入（file:// 也能用），開發版退回 CDN
-const _src = document.getElementById('three-src').textContent;
-const THREE = _src.length > 10000
-  ? await import(URL.createObjectURL(new Blob([_src], { type: 'text/javascript' })))
-  : await import('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js');
+// three.js、模型載入器、小公主程式與模型：離線版全部內嵌在頁面裡（不需網路），開發版從 CDN 與本機檔案載入
+const srcOf = id => { const el = document.getElementById(id); return el ? el.textContent : ''; };
+const blobUrl = code => URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
+const _src = srcOf('three-src');
+const EMBED = _src.length > 10000;
+let THREE, GLTFLoader, createPrincess, princessGLB;
+if (EMBED) {
+  const threeUrl = blobUrl(_src);                       // 所有模組共用同一份 three.js
+  THREE = await import(threeUrl);
+  const toThree = code => code.replace(/from\s*['"]three['"]/g, `from '${threeUrl}'`);
+  const bguUrl = blobUrl(toThree(srcOf('bgu-src')));
+  ({ GLTFLoader } = await import(blobUrl(toThree(srcOf('gltf-src')).replace(/['"]\.\.\/utils\/BufferGeometryUtils\.js['"]/g, `'${bguUrl}'`))));
+  ({ createPrincess } = await import(blobUrl(srcOf('rig-src'))));
+  princessGLB = Uint8Array.from(atob(srcOf('glb-src').trim()), c => c.charCodeAt(0)).buffer;
+} else {
+  THREE = await import('three');
+  ({ GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js'));
+  ({ createPrincess } = await import('./princess-rig.js'));
+  princessGLB = await (await fetch('models/princess.glb')).arrayBuffer();
+}
 const PARAMS = new URLSearchParams(location.search);
 const WALL = PARAMS.has('wallpaper');           // 由安裝程式設為桌布時的模式
 const MIRROR = PARAMS.get('mirror');            // 其他螢幕上的複本：只顯示，不存檔、不接收指令
@@ -198,7 +222,7 @@ const pick = a => a[Math.floor(Math.random() * a.length)];
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 const UP = new THREE.Vector3(0, 1, 0);
 const R = 3;                 // 星球半徑
-const PRINCE_H = 0.92;       // 星球旅人身高（含頭髮）
+const PRINCE_H = 0.9;        // 小公主身高（含皇冠）
 
 function hash3(x, y, z) { const h = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453; return h - Math.floor(h); }
 function vnoise(x, y, z) {
@@ -220,7 +244,7 @@ function randUnit() {
   return new THREE.Vector3(s * Math.cos(th), u, s * Math.sin(th));
 }
 
-/* 地形高度：fbm 起伏 + 隕石坑，北極（星球旅人站的地方）壓平 */
+/* 地形高度：fbm 起伏 + 隕石坑，北極（小公主站的地方）壓平 */
 const CRATERS = [[dirFrom(8, 70), .13, .05], [dirFrom(-25, 150), .18, .06], [dirFrom(-50, -40), .15, .05],
                  [dirFrom(30, -150), .1, .04], [dirFrom(-12, -95), .09, .035]];
 function heightAt(d) {
@@ -602,7 +626,7 @@ const lamp = {};
   OBST.push({ dir: d, r: .14 });
 }
 
-/* 北極的星球旅人也是障礙物 */
+/* 北極的小公主也是障礙物 */
 OBST.push({ dir: UP, r: .2 });
 
 function blocked(d, margin = .1) { for (const o of OBST) if (Math.acos(clamp(d.dot(o.dir), -1, 1)) * R < o.r + margin) return true; return false; }
@@ -694,59 +718,21 @@ function updateBubbles(dt) {
   }
 }
 
-/* ================= 星球旅人 ================= */
-const prince = { g: new THREE.Group(), yaw: 0, wave: 0, lookT: 0, lookRose: 0 };
-{
-  const g = prince.g;
-  const skin = M(0xf8dcc6, { roughness: .6 }), hair = M(0xf5cf47, { roughness: .55 }), coat = M(0x3f8f6a),
-        pants = M(0x3d6a5c), boot = M(0x5a3b28), trim = M(0xf2d27a), eye = M(0x2a2a36);
-  for (const s of [-1, 1]) {
-    const b = sph(.048, boot, s * .05, .03, .02, 10, 8); b.scale.set(1, .7, 1.5); g.add(b);
-    g.add(mesh(new THREE.CylinderGeometry(.03, .032, .22, 8), pants, s * .05, .14, 0));
-  }
-  prince.body = new THREE.Group(); g.add(prince.body);
-  prince.body.add(mesh(new THREE.CylinderGeometry(.1, .2, .32, 20), coat, 0, .37, 0));
-  prince.body.add(mesh(new THREE.CylinderGeometry(.2, .205, .03, 20), trim, 0, .215, 0));
-  prince.body.add(mesh(new THREE.CylinderGeometry(.088, .1, .14, 16), coat, 0, .58, 0));
-  for (const s of [-1, 1]) {                      // 肩上的小星星
-    const st = mesh(new THREE.OctahedronGeometry(.022, 0), trim, s * .075, .64, .04); prince.body.add(st);
-  }
-  prince.head = new THREE.Group(); prince.head.position.y = .76; prince.body.add(prince.head);
-  prince.head.add(sph(.115, skin, 0, 0, 0, 20, 16));
-  for (const s of [-1, 1]) {
-    prince.head.add(sph(.014, eye, s * .042, .005, .105, 8, 6));
-    const ck = sph(.02, M(0xf3a0a0, { roughness: .8 }), s * .068, -.035, .088, 8, 6); ck.scale.z = .4; prince.head.add(ck);
-  }
-  prince.head.add(mesh(new THREE.SphereGeometry(.122, 20, 10, 0, Math.PI * 2, 0, Math.PI * .45), hair, 0, .01, -.005));
-  for (let i = 0; i < 11; i++) {                  // 金色亂髮
-    const a = i / 11 * Math.PI * 2, el = rand(.35, .9);
-    const c = mesh(new THREE.ConeGeometry(.032, .11, 6), hair);
-    const dir = new THREE.Vector3(Math.cos(a) * Math.cos(el), Math.sin(el), Math.sin(a) * Math.cos(el));
-    c.position.copy(dir).multiplyScalar(.11); c.quaternion.setFromUnitVectors(UP, dir); prince.head.add(c);
-  }
-  prince.arms = [];
-  for (const s of [-1, 1]) {
-    const arm = new THREE.Group(); arm.position.set(s * .1, .63, 0);
-    const a = mesh(new THREE.CylinderGeometry(.024, .03, .2, 8), coat, 0, -.1, 0); arm.add(a);
-    arm.add(sph(.026, skin, 0, -.21, 0, 8, 6));
-    arm.rotation.z = s * .14; prince.body.add(arm); prince.arms.push(arm);
-  }
-  // 圍巾
-  const scarfM = M(0xf4c430, { roughness: .6, side: THREE.DoubleSide });
-  const ring = mesh(new THREE.TorusGeometry(.082, .026, 8, 18), scarfM, 0, .655, 0); ring.rotation.x = Math.PI / 2; prince.body.add(ring);
-  prince.scarf = [];
-  let parent = new THREE.Group(); parent.position.set(.03, .66, -.08); prince.body.add(parent);
-  for (let i = 0; i < 7; i++) {
-    const seg = new THREE.Group(); seg.position.z = i === 0 ? 0 : -.06;
-    const w = .055 - i * .004;
-    seg.add(mesh(new THREE.BoxGeometry(w, .012, .065), scarfM, 0, 0, -.03));
-    parent.add(seg); prince.scarf.push(seg); parent = seg;
-  }
-  shadowAll(g);
-  g.position.copy(UP).multiplyScalar(heightAt(UP) - .01);
-  planet.add(g);
-}
-function princeReact(e, wave = true) { if (wave) princeDo('wave', 2.4, null); bubble(prince.g, e, 1.12, .3); }
+/* ================= 小公主（Blender 模型 + princess-rig.js） ================= */
+const prince = { g: new THREE.Group(), yaw: 0, model: null };
+prince.g.position.copy(UP).multiplyScalar(heightAt(UP) - .005);
+planet.add(prince.g);
+new GLTFLoader().parse(princessGLB, '', gltf => {
+  prince.model = createPrincess(THREE, gltf.scene);
+  prince.g.add(prince.model.root);
+}, err => console.error('小公主模型載入失敗', err));
+// 說話泡泡對應的表情
+const FACE_OF = { '😊': 'happy', '👋': 'happy', '💛': 'happy', '🌱': 'happy', '🥕': 'happy', '♪': 'happy', '👍': 'happy', '🌹': 'happy', '😆': 'happy',
+                  '💕': 'shy', '🌸': 'happy', '❗': 'wow', '❓': 'wow', '✨': 'star', '⭐': 'star', '💧': 'talk', '🌙': 'talk' };
+function princeFace(e) { if (prince.model) prince.model.express(FACE_OF[e] || 'happy', 2.4); }
+function princeReact(e, wave = true) { if (wave) princeDo('wave', 2.4, null); bubble(prince.g, e, 1.12, .3); princeFace(e); }
+// 流星雨開始時雙手握拳加油
+function princeCheer() { if (!prince.pose) { princeDo('cheer', 2.8); princeSay('⭐'); } }
 
 /* ================= 居民 ================= */
 function legSet(parent, mat, pts, len, r = .02) {
@@ -987,7 +973,7 @@ function updGround(c, dt, t) {
       if (c.timer < 0) { c.mode = 'wander'; c.timer = rand(3, 6); }
       break;
     case 'greet':
-      steer(c, c.partner ? c.partner.dir : UP, 5, dt);   // 沒有對象時是在回應星球旅人
+      steer(c, c.partner ? c.partner.dir : UP, 5, dt);   // 沒有對象時是在回應小公主
       c.hop = c.timer > .7 ? Math.abs(Math.sin(c.timer * 8)) * .06 : 0;
       if (c.timer < 0) endSocial(c);
       break;
@@ -1025,7 +1011,7 @@ function updGround(c, dt, t) {
       const s = c.target && c.target.s; pose = 'eat';
       if (s) { s.scale = Math.max(0, s.scale - dt / 3); steer(c, s.dir, 3, dt); }
       if (c.timer < 0) {
-        if (s) { eatSprout(s); if (Math.random() < .5) princeReact('👍', false); }
+        if (s) { eatSprout(s); if (Math.random() < .6 && !prince.pose) { princeDo('thumb', 2.2); princeReact('👍', false); } }   // 小公主比讚
         c.target = null; c.mode = 'wander'; c.hunger = rand(14, 28); c.timer = rand(3, 6);
       }
       break;
@@ -1165,15 +1151,15 @@ function interactions(dt) {
   }
 }
 
-/* ---------- 星球旅人動畫 ---------- */
+/* ---------- 小公主動畫 ---------- */
 const _camL = new THREE.Vector3();
 function angLerp(a, b, k) { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return a + d * k; }
-/* 星球旅人的互動：打招呼、呼喚居民、摸摸頭、澆玫瑰、趕走靠近玫瑰的綿羊、看星星 */
+/* 小公主的互動：打招呼、呼喚居民、摸摸頭、澆玫瑰、趕走靠近玫瑰的綿羊、看星星 */
 const PRINCE_HI = { fox: '💛', sheep: '🌱', rabbit: '🥕', snake: '🌙', bird: '♪', butterfly: '✨' };
 const REPLY = { fox: '💛', sheep: '💕', rabbit: '💕', snake: '…', bird: '♪', butterfly: '✨' };
 Object.assign(prince, { pose: '', poseT: 0, focus: null, actT: rand(6, 10), cd: 0, roseGlow: 0 });
 function princeDo(pose, dur, focus = null) { prince.pose = pose; prince.poseT = dur; prince.focus = focus; }
-const princeSay = (e, delay = 0) => delay ? setTimeout(() => bubble(prince.g, e, 1.12, .3), delay) : bubble(prince.g, e, 1.12, .3);
+const princeSay = (e, delay = 0) => { const say = () => { bubble(prince.g, e, 1.12, .3); princeFace(e); }; delay ? setTimeout(say, delay) : say(); };
 const sayTo = (c, e, delay = 0) => setTimeout(() => creatures.includes(c) && bubble(c.g, e, c.bh), delay);
 function princeBrain(dt) {
   prince.cd -= dt; prince.actT -= dt; prince.poseT -= dt;
@@ -1187,7 +1173,7 @@ function princeBrain(dt) {
     if (c.mode === 'sit' && !c.petted && c.timer < c.sitDur - 1.3) {
       c.petted = true; princeDo('pet', 2.4, c); princeSay('💕'); sayTo(c, REPLY[c.type], 500); continue;
     }
-    // 綿羊靠近玫瑰 → 星球旅人緊張地把牠趕走
+    // 綿羊靠近玫瑰 → 小公主緊張地把牠趕走
     if (c.type === 'sheep' && arc(c.dir, ROSE_DIR) < .6 && c.mode !== 'flee' && prince.cd <= 0) {
       prince.cd = 4; princeDo('wave', 1.8, c); princeSay('❗');
       releaseTarget(c); c.mode = 'flee'; c.threat = { dir: ROSE_DIR }; c.timer = 2.4; sayTo(c, '💦', 300); continue;
@@ -1208,8 +1194,10 @@ function princeBrain(dt) {
     if (r < .45 && far.length) {          // 呼喚遠處的居民過來
       const c = pick(far); princeDo('wave', 2.2, c); princeSay('👋');
       c.mode = 'seek'; c.target = { kind: 'prince' }; c.seekT = 0; sayTo(c, '❗', 600);
-    } else if (r < .72) {                 // 幫玫瑰澆水
+    } else if (r < .64) {                 // 幫玫瑰澆水
       princeDo('water', 4.2, 'rose'); princeSay('💧'); princeSay('🌹', 2000); prince.roseGlow = 3.5;
+    } else if (r < .82) {                 // 坐下來休息一下
+      princeDo('sit', rand(6, 10)); princeSay('🌸'); prince.actT += 6;
     } else {                              // 抬頭看星星
       princeDo('stars', 4.5); princeSay('⭐');
     }
@@ -1231,21 +1219,7 @@ function updPrince(dt, t) {
   }
   prince.yaw = angLerp(prince.yaw, target, 1 - Math.exp(-dt * 2.2));
   prince.g.rotation.y = prince.yaw;
-  prince.body.scale.y = 1 + Math.sin(t * 2) * .012;
-  prince.head.rotation.z = Math.sin(t * .7) * .06;
-  prince.scarf.forEach((s, i) => {
-    s.rotation.y = Math.sin(t * 2.6 - i * .7) * .32 + .28;
-    s.rotation.x = Math.sin(t * 3.7 - i * .9) * .22 - .1 + (i === 0 ? .25 : 0);
-  });
-  const p = prince.pose, k = 1 - Math.exp(-dt * 7);
-  const [armL, armR] = prince.arms;
-  const rz = p === 'wave' ? 2.5 + Math.sin(t * 12) * .35 : p === 'reach' ? 2.8 + Math.sin(t * 3) * .1 : p === 'pet' ? .3 : .14;
-  const rx = p === 'pet' ? -1.15 + Math.sin(t * 8) * .12 : p === 'reach' ? -.35 : 0;
-  armR.rotation.z += (rz - armR.rotation.z) * k; armR.rotation.x += (rx - armR.rotation.x) * k;
-  armL.rotation.x += ((p === 'water' ? -1.05 + Math.sin(t * 2.5) * .08 : 0) - armL.rotation.x) * k;
-  prince.body.rotation.x += ((p === 'pet' ? .24 : p === 'water' ? .12 : 0) - prince.body.rotation.x) * k;
-  const hx = p === 'stars' ? -.45 : birdOnHead ? -.3 : p === 'pet' ? .2 : 0;
-  prince.head.rotation.x += (hx - prince.head.rotation.x) * k;
+  if (prince.model) prince.model.update(dt, t, { pose: prince.pose, birdOnHead });   // 姿勢、手勢、表情、頭髮與緞帶
   prince.roseGlow = Math.max(0, prince.roseGlow - dt);
   roseBloom.scale.setScalar(1 + Math.sin(Math.min(prince.roseGlow, 3.5) / 3.5 * Math.PI) * .25);
 }
@@ -1303,7 +1277,10 @@ function spawnMeteor() {
   scene.add(m, head);
   meteors.push({ m, head, dir, speed: rand(.5, .85) * dist, len: rand(.08, .16) * dist, w: dist * .0032, age: 0, life: rand(.9, 1.7) });
 }
+let wasShower = false;
 function updMeteors(dt) {
+  if (showerLeft > 0 && !wasShower) princeCheer();       // 流星雨開始
+  wasShower = showerLeft > 0;
   meteorClock -= dt * meteorRate;
   if (meteorClock < 0) { meteorClock = rand(3, 10); if (Math.random() < .07) showerLeft = Math.floor(rand(5, 9)); else spawnMeteor(); }
   if (showerLeft > 0) { showerClock -= dt; if (showerClock < 0) { spawnMeteor(); showerLeft--; showerClock = rand(.15, .6); } }
@@ -1329,7 +1306,7 @@ function layout() {
   planetPivot.position.set(px, -.35, 0);
   sun.position.set(px - 8, 7.5, 9);
   rimLight.position.set(px + 7, 3, -8);
-  // 依螢幕比例擺放遠方星球（fx, fy 為 -1~1 的畫面位置），避開正中間的月曆與右側的星球旅人星球
+  // 依螢幕比例擺放遠方星球（fx, fy 為 -1~1 的畫面位置），避開正中間的月曆與右側的小公主星球
   const at = (o, fx, fy, z) => { const h = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * (CAM_Z - z); o.position.set(fx * h * camera.aspect, fy * h, z); };
   at(ringPlanet, -.6, .52, -48);
   at(moon, .3, -.8, -38);
@@ -1357,7 +1334,7 @@ addEventListener('pointermove', e => {
   idleT = 0; ui.classList.remove('dim');
 });
 
-/* 點擊居民 / 星球旅人 */
+/* 點擊居民 / 小公主 */
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 renderer.domElement.addEventListener('pointerdown', e => {
   ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
@@ -1425,7 +1402,29 @@ if (SEED) {
     try { if (typeof SEED[k] === 'string' && localStorage.getItem(k) === null) localStorage.setItem(k, SEED[k]); } catch (e) { /* 無法儲存時照常運作 */ }
   }
 }
-addEventListener('pagehide', () => save());
+/* 安裝程式版：組織的 Edge 原則可能在關閉時清除瀏覽器儲存，所以居民、行事曆與顯示設定
+   另外存到安裝資料夾的 data.json（由桌布程式在 127.0.0.1 的本機伺服器 /data 讀寫）。
+   只有瀏覽器儲存裡沒有的項目才從檔案補回，避免蓋掉這次執行中較新的資料。 */
+const PERSIST_KEYS = ['planet-wallpaper-planet-v1', 'planet-wallpaper-calendar', 'planet-wallpaper-display'];
+const HAS_SERVER = location.protocol === 'http:' && location.hostname === '127.0.0.1';
+if (HAS_SERVER) {
+  try {
+    const d = await (await fetch('/data', { cache: 'no-store' })).json();
+    for (const k of PERSIST_KEYS) if (typeof d[k] === 'string' && localStorage.getItem(k) === null) localStorage.setItem(k, d[k]);
+  } catch (e) { /* 讀不到就用預設值 */ }
+}
+const snapshot = () => { const d = {}; try { for (const k of PERSIST_KEYS) { const v = localStorage.getItem(k); if (v !== null) d[k] = v; } } catch (e) { /* 忽略 */ } return JSON.stringify(d); };
+let lastPushed = snapshot();
+function pushData(beacon) {
+  if (!HAS_SERVER || MIRROR) return;
+  const s = snapshot();
+  if (s === lastPushed || s === '{}') return;
+  lastPushed = s;
+  if (beacon) navigator.sendBeacon('/data', new Blob([s], { type: 'application/json' }));
+  else fetch('/data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: s }).catch(() => { lastPushed = null; });
+}
+setInterval(() => pushData(false), 2000);
+addEventListener('pagehide', () => { save(); pushData(true); });
 
 /* 「星球居民管理」視窗透過 localStorage 傳指令過來（桌布本身不接收滑鼠點擊） */
 const CMD_KEY = 'planet-wallpaper-cmds';

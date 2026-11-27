@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>星球居民及行事曆管理</title>
+<style>
+  /* 鄉村美式風格：亞麻布、木頭招牌、紅白格紋、縫線 */
+  :root{
+    --linen:#f3eadb; --paper:#fbf6ea; --cream:#fffaf0; --kraft:#c9a87c; --line:#dcc8a6; --stitch:#bfa27b;
+    --wood:#8a5a3b; --wood-l:#a7744f; --wood-d:#5b3a24;
+    --barn:#a8432f; --barn-d:#863322; --sage:#7c9a6d; --sage-d:#62805a; --mustard:#d9a441; --denim:#4f6d8f;
+    --ink:#3e2c20; --ink-dim:#7c6550;
+    --serif:"Noto Serif TC","Source Han Serif TC","PMingLiU","新細明體",Georgia,serif;
+    --sans:"Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{color:var(--ink);font-family:var(--sans);padding:14px 14px 46px;user-select:none;color-scheme:light;
+    background:
+      repeating-linear-gradient(0deg,rgba(120,88,58,.045) 0 1px,transparent 1px 4px),
+      repeating-linear-gradient(90deg,rgba(120,88,58,.04) 0 1px,transparent 1px 4px),
+      var(--linen)}
+  .sign{position:relative;padding:14px 18px 12px;border-radius:10px;color:#fdf3df;text-align:center;
+    background:
+      repeating-linear-gradient(91deg,rgba(0,0,0,.07) 0 2px,transparent 2px 11px),
+      repeating-linear-gradient(89deg,rgba(255,255,255,.05) 0 1px,transparent 1px 17px),
+      linear-gradient(180deg,var(--wood-l),var(--wood) 55%,#7a4c2f);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.25),inset 0 -2px 0 rgba(0,0,0,.18),0 3px 0 var(--wood-d),0 8px 16px rgba(91,58,36,.25)}
+  .sign::before,.sign::after{content:"";position:absolute;top:50%;width:7px;height:7px;margin-top:-3.5px;border-radius:50%;
+    background:radial-gradient(circle at 35% 35%,#e8dccb,#6f6253 70%)}
+  .sign::before{left:9px}.sign::after{right:9px}
+  .sign h1{margin:0;font-family:var(--serif);font-size:21px;letter-spacing:.16em;text-shadow:0 1px 0 rgba(0,0,0,.35)}
+  .sign .tagline{font-size:11px;letter-spacing:.3em;opacity:.8;margin-top:3px;font-family:var(--serif)}
+  .status{margin:10px auto 0;width:max-content;max-width:100%;display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-dim);
+    padding:4px 12px;border-radius:999px;background:var(--cream);border:1px dashed var(--stitch)}
+  .dot{width:8px;height:8px;border-radius:50%;background:#c9a3a3;flex:none}
+  .dot.on{background:var(--sage);box-shadow:0 0 0 3px rgba(124,154,109,.2)}
+  .count{color:var(--barn);font-weight:700}
+  .card{position:relative;margin-top:16px;padding:22px 16px 16px;border-radius:12px;background:var(--paper);
+    border:1px solid var(--line);box-shadow:0 2px 0 #d9c6a2,0 8px 18px rgba(91,58,36,.12);
+    outline:1.5px dashed var(--stitch);outline-offset:-7px}
+  .card::before{content:"";position:absolute;left:0;right:0;top:0;height:11px;border-radius:12px 12px 0 0;
+    background:
+      repeating-linear-gradient(0deg,rgba(168,67,47,.42) 0 5.5px,transparent 5.5px 11px),
+      repeating-linear-gradient(90deg,rgba(168,67,47,.42) 0 5.5px,transparent 5.5px 11px),#fff}
+  .card.blue::before{background:
+      repeating-linear-gradient(0deg,rgba(79,109,143,.4) 0 5.5px,transparent 5.5px 11px),
+      repeating-linear-gradient(90deg,rgba(79,109,143,.4) 0 5.5px,transparent 5.5px 11px),#fff}
+  .card.green::before{background:
+      repeating-linear-gradient(0deg,rgba(124,154,109,.45) 0 5.5px,transparent 5.5px 11px),
+      repeating-linear-gradient(90deg,rgba(124,154,109,.45) 0 5.5px,transparent 5.5px 11px),#fff}
+  .ttl{display:flex;align-items:center;gap:8px;margin:2px 0 12px;font-family:var(--serif);font-size:16px;font-weight:700;color:var(--barn-d);letter-spacing:.12em}
+  .ttl::after{content:"";flex:1;height:1px;background:repeating-linear-gradient(90deg,var(--stitch) 0 5px,transparent 5px 9px)}
+  .ttl small{font-family:var(--sans);font-weight:400;font-size:11px;color:var(--ink-dim);letter-spacing:.04em}
+  button{font:inherit;color:inherit;cursor:pointer}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+  .tile{padding:9px 4px 7px;border-radius:10px;background:var(--cream);border:1.5px solid var(--line);
+    display:flex;flex-direction:column;align-items:center;gap:1px;font-size:25px;box-shadow:0 2px 0 var(--line);transition:transform .08s,background .15s}
+  .tile span{font-size:12.5px;font-family:var(--serif);color:var(--ink);letter-spacing:.1em}
+  .tile:hover{background:#fff1d6;border-color:var(--kraft)}
+  .tile:active{transform:translateY(2px);box-shadow:none}
+  .row{display:flex;gap:7px;margin-top:12px}
+  .btn{flex:1;padding:8px 6px;border-radius:9px;border:1.5px solid rgba(0,0,0,.12);font-size:13px;letter-spacing:.06em;
+    box-shadow:0 2px 0 rgba(0,0,0,.18);transition:transform .08s,filter .15s}
+  .btn:hover{filter:brightness(1.06)}
+  .btn:active{transform:translateY(2px);box-shadow:none}
+  .btn.red{background:var(--barn);color:#fff6ea}
+  .btn.sage{background:var(--sage);color:#fbfff4}
+  .btn.kraft{background:var(--kraft);color:var(--ink)}
+  .btn.cream{background:var(--cream);color:var(--ink);border-color:var(--line)}
+  .slider{display:flex;align-items:center;gap:10px;margin-top:13px;font-size:12.5px;color:var(--ink-dim);font-family:var(--serif);letter-spacing:.08em}
+  .slider input{flex:1;accent-color:var(--wood)}
+  .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .opt{padding:10px 4px 8px;border-radius:10px;background:var(--cream);border:1.5px solid var(--line);box-shadow:0 2px 0 var(--line);
+    display:flex;flex-direction:column;align-items:center;gap:4px;font-family:var(--serif);font-size:13px;letter-spacing:.08em;color:var(--ink)}
+  .opt svg{width:46px;height:26px}
+  .opt:hover{background:#fff1d6}
+  .opt.on{background:var(--sage);border-color:var(--sage-d);color:#fbfff4;box-shadow:0 2px 0 var(--sage-d)}
+  .opt.on svg rect{stroke:#fbfff4}
+  .opt.on svg rect.lit{fill:#fbfff4}
+  .note{margin-top:9px;font-size:11.5px;color:var(--ink-dim);line-height:1.5}
+  .mbar{display:flex;align-items:center;gap:6px}
+  .mbar .lab{font-size:12px;color:var(--ink-dim);font-family:var(--serif);letter-spacing:.06em;margin-right:2px}
+  .arrow{width:30px;height:30px;border-radius:50%;border:1.5px solid var(--line);background:var(--cream);font-size:16px;line-height:1;color:var(--wood-d);box-shadow:0 2px 0 var(--line)}
+  .arrow:active{transform:translateY(2px);box-shadow:none}
+  .mname{flex:1;text-align:center;font-family:var(--serif);font-size:16px;font-weight:700;color:var(--wood-d);letter-spacing:.08em}
+  .mode{font-size:10.5px;padding:2px 8px;border-radius:999px;background:var(--mustard);color:#fffaf0;letter-spacing:.08em;white-space:nowrap}
+  .mode.fixed{background:var(--denim)}
+  .now{flex:none;padding:5px 10px;font-size:12px}
+  .mini{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:12px;padding:8px;border-radius:10px;background:var(--cream);border:1.5px solid var(--line)}
+  .mini .wd{text-align:center;font-size:11px;color:var(--ink-dim);font-family:var(--serif);padding-bottom:2px}
+  .mini .wd:first-child{color:var(--barn)}.mini .wd:nth-child(7){color:var(--denim)}
+  .md{position:relative;height:30px;border:1.5px solid transparent;border-radius:8px;background:transparent;font-size:12.5px;color:var(--ink)}
+  .md:hover{background:#f6ead3}
+  .md.out{color:#c4b39a}
+  .md.sun{color:var(--barn)}.md.sat{color:var(--denim)}
+  .md.today{background:rgba(217,164,65,.25);font-weight:700}
+  .md.sel{border-color:var(--barn);background:#fbe9df}
+  .md .pip{position:absolute;left:50%;bottom:3px;width:5px;height:5px;margin-left:-2.5px;border-radius:50%;background:var(--barn)}
+  .form{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+  .form label{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--ink-dim);font-family:var(--serif);letter-spacing:.06em}
+  .form .wide{grid-column:1/-1}
+  input[type=date],input[type=time],input[type=text]{font:inherit;font-size:13px;color:var(--ink);padding:7px 9px;border-radius:8px;
+    border:1.5px solid var(--line);background:#fffdf7;outline:none;width:100%}
+  input:focus{border-color:var(--kraft);box-shadow:0 0 0 3px rgba(201,168,124,.25)}
+  .swatches{display:flex;gap:8px;align-items:center}
+  .sw{width:24px;height:24px;border-radius:50%;border:2px solid #fffaf0;box-shadow:0 0 0 1.5px var(--line);background:var(--c)}
+  .sw.on{box-shadow:0 0 0 2.5px var(--wood-d)}
+  .list{margin-top:14px}
+  .list .head{font-size:12px;color:var(--ink-dim);font-family:var(--serif);letter-spacing:.08em;margin-bottom:4px}
+  .ev{display:flex;align-items:center;gap:9px;padding:8px 2px;border-bottom:1px dashed var(--line)}
+  .ev .bar{width:5px;align-self:stretch;border-radius:3px;background:var(--c)}
+  .ev .when{flex:none;min-width:74px;font-size:11.5px;color:var(--wood-d);font-family:var(--serif);line-height:1.3;white-space:pre-line}
+  .ev .what{flex:1;min-width:0;font-size:13px;overflow-wrap:anywhere}
+  .del{flex:none;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--line);background:var(--cream);color:var(--barn);font-size:13px;line-height:1}
+  .del:hover{background:#fbe1d8;border-color:var(--barn)}
+  .empty{font-size:12.5px;color:var(--ink-dim);text-align:center;padding:12px 0 4px;font-family:var(--serif)}
+  .toast{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);background:var(--wood-d);color:#fdf3df;
+    font-size:12.5px;padding:7px 16px;border-radius:999px;opacity:0;transition:opacity .3s;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.2);white-space:nowrap}
+  .toast.show{opacity:1}
+  .credit{position:fixed;right:10px;bottom:8px;z-index:5;font-size:11.5px;letter-spacing:.18em;color:var(--wood-d);
+    font-family:var(--serif);padding:3px 10px;border-radius:999px;background:rgba(251,246,234,.92);border:1px dashed var(--stitch);pointer-events:none}
+</style>
+</head>
+<body>
+  <div class="sign">
+    <h1>小公主的星球</h1>
+    <div class="tagline">THE LITTLE PLANET · EST. 2026</div>
+  </div>
+  <div class="status"><span class="dot" id="dot"></span><span id="st">尋找桌布中…</span></div>
+
+  <section class="card green">
+    <div class="ttl">❦ 桌布顯示螢幕</div>
+    <div class="seg">
+      <button class="opt" data-disp="primary">
+        <svg viewBox="0 0 46 26"><rect class="lit" x="25" y="3" width="18" height="13" rx="2" fill="#7c9a6d" stroke="#5b3a24" stroke-width="1.5"/><rect x="3" y="3" width="18" height="13" rx="2" fill="none" stroke="#5b3a24" stroke-width="1.5"/></svg>主螢幕</button>
+      <button class="opt" data-disp="secondary">
+        <svg viewBox="0 0 46 26"><rect x="25" y="3" width="18" height="13" rx="2" fill="none" stroke="#5b3a24" stroke-width="1.5"/><rect class="lit" x="3" y="3" width="18" height="13" rx="2" fill="#7c9a6d" stroke="#5b3a24" stroke-width="1.5"/></svg>副螢幕</button>
+      <button class="opt" data-disp="all">
+        <svg viewBox="0 0 46 26"><rect class="lit" x="25" y="3" width="18" height="13" rx="2" fill="#7c9a6d" stroke="#5b3a24" stroke-width="1.5"/><rect class="lit" x="3" y="3" width="18" height="13" rx="2" fill="#7c9a6d" stroke="#5b3a24" stroke-width="1.5"/></svg>同時顯示</button>
+    </div>
+    <div class="note">切換後約 3 秒生效，桌布會自動配合各螢幕的解析度。只有一個螢幕時一律顯示在主螢幕。</div>
+  </section>
+
+  <section class="card">
+    <div class="ttl">❦ 星球居民</div>
+    <div class="grid">
+      <button class="tile" data-add="fox">🦊<span>狐狸</span></button>
+      <button class="tile" data-add="sheep">🐑<span>綿羊</span></button>
+      <button class="tile" data-add="snake">🐍<span>小蛇</span></button>
+      <button class="tile" data-add="bird">🐦<span>小鳥</span></button>
+      <button class="tile" data-add="butterfly">🦋<span>蝴蝶</span></button>
+      <button class="tile" data-add="rabbit">🐇<span>兔子</span></button>
+    </div>
+    <div class="row">
+      <button class="btn sage" data-cmd="shower">☄ 流星雨</button>
+      <button class="btn kraft" data-cmd="undo">↶ 移除一隻</button>
+      <button class="btn red" data-cmd="clear">清空</button>
+    </div>
+    <label class="slider">自轉速度 <input id="spd" type="range" min="0" max="100" value="35"></label>
+    <label class="slider">流星頻率 <input id="met" type="range" min="0" max="100" value="50"></label>
+  </section>
+
+  <section class="card blue">
+    <div class="ttl">❦ 行事曆 <small>顯示在桌面正中間</small></div>
+    <div class="mbar">
+      <span class="lab">桌面月份</span>
+      <button class="arrow" id="mPrev" title="上個月">‹</button>
+      <div class="mname" id="mName"></div>
+      <button class="arrow" id="mNext" title="下個月">›</button>
+    </div>
+    <div class="mbar" style="margin-top:8px;justify-content:flex-end">
+      <span class="mode" id="mMode"></span>
+      <button class="btn cream now" id="mNow">回到本月</button>
+    </div>
+    <div class="mini" id="mini"></div>
+    <div class="form">
+      <label>日期<input type="date" id="eDate"></label>
+      <label>時間（可不填）<input type="time" id="eTime"></label>
+      <label class="wide">行程內容<input type="text" id="eTitle" maxlength="40" placeholder="例如：去花市買玫瑰"></label>
+      <div class="wide swatches" id="sw">
+        <span style="font-size:11.5px;color:var(--ink-dim);font-family:var(--serif)">標籤顏色</span>
+        <button class="sw on" style="--c:#a8432f" data-c="#a8432f" title="穀倉紅"></button>
+        <button class="sw" style="--c:#7c9a6d" data-c="#7c9a6d" title="鼠尾草綠"></button>
+        <button class="sw" style="--c:#d9a441" data-c="#d9a441" title="芥末黃"></button>
+        <button class="sw" style="--c:#4f6d8f" data-c="#4f6d8f" title="丹寧藍"></button>
+        <button class="sw" style="--c:#a07cb0" data-c="#a07cb0" title="薰衣草紫"></button>
+      </div>
+      <button class="btn red wide" id="eAdd">＋ 加入行程</button>
+    </div>
+    <div class="list">
+      <div class="head" id="listHead"></div>
+      <div id="eList"></div>
+    </div>
+  </section>
+  <div class="toast" id="toast"></div>
+  <div class="credit">創作人 官毅明</div>
+
+<script>
+  const CMD_KEY = 'planet-wallpaper-cmds', STATE_KEY = 'planet-wallpaper-planet-v1', BEAT_KEY = 'planet-wallpaper-beat',
+        CAL_KEY = 'planet-wallpaper-calendar', DISPLAY_KEY = 'planet-wallpaper-display';
+  const $ = id => document.getElementById(id);
+  const read = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } };
+  const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } };
+  let tt;
+  function toast(m) { const el = $('toast'); el.textContent = m; el.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => el.classList.remove('show'), 1500); }
+
+  /* 永久保存：組織的 Edge 原則可能在關閉時清除瀏覽器儲存，所以資料另外存到安裝資料夾的 data.json。
+     開啟時把瀏覽器儲存裡缺少的項目從檔案補回，之後每 2 秒把變動寫回檔案。 */
+  const PERSIST_KEYS = [STATE_KEY, CAL_KEY, DISPLAY_KEY];
+  const HAS_SERVER = location.protocol === 'http:' && location.hostname === '127.0.0.1';
+  function snapshot() { const d = {}; try { for (const k of PERSIST_KEYS) { const v = localStorage.getItem(k); if (v !== null) d[k] = v; } } catch (e) {} return JSON.stringify(d); }
+  if (HAS_SERVER) {
+    try {
+      const x = new XMLHttpRequest(); x.open('GET', '/data', false); x.send();
+      const d = JSON.parse(x.responseText || '{}');
+      for (const k of PERSIST_KEYS) if (typeof d[k] === 'string' && localStorage.getItem(k) === null) localStorage.setItem(k, d[k]);
+    } catch (e) { /* 讀不到就照常運作 */ }
+  }
+  let lastPushed = snapshot();
+  function pushData(beacon) {
+    if (!HAS_SERVER) return;
+    const s = snapshot();
+    if (s === lastPushed || s === '{}') return;
+    lastPushed = s;
+    if (beacon) navigator.sendBeacon('/data', new Blob([s], { type: 'application/json' }));
+    else fetch('/data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: s }).catch(() => { lastPushed = null; });
+  }
+  setInterval(() => pushData(false), 2000);
+  addEventListener('pagehide', () => pushData(true));
+
+  /* ---------- 顯示螢幕 ---------- */
+  const dispNames = { primary: '主螢幕', secondary: '副螢幕', all: '所有螢幕' };
+  function showDisp() {
+    const m = read(DISPLAY_KEY, 'primary');
+    document.querySelectorAll('[data-disp]').forEach(b => b.classList.toggle('on', b.dataset.disp === m));
+  }
+  document.querySelectorAll('[data-disp]').forEach(b => b.onclick = () => {
+    write(DISPLAY_KEY, b.dataset.disp); showDisp(); toast('桌布將顯示於' + dispNames[b.dataset.disp]);
+  });
+  showDisp();
+
+  /* ---------- 居民 ---------- */
+  function send(cmd, msg) { const q = read(CMD_KEY, []); q.push(cmd); write(CMD_KEY, q); if (msg) toast(msg); }
+  const names = { fox: '狐狸', sheep: '綿羊', snake: '小蛇', bird: '小鳥', butterfly: '蝴蝶', rabbit: '兔子' };
+  document.querySelectorAll('[data-add]').forEach(b => b.onclick = () => send({ a: 'add', t: b.dataset.add }, '新增了一隻' + names[b.dataset.add]));
+  document.querySelectorAll('[data-cmd]').forEach(b => b.onclick = () => {
+    if (b.dataset.cmd === 'clear' && !confirm('要移除星球上所有的居民嗎？')) return;
+    send({ a: b.dataset.cmd }, { shower: '流星雨來了 ☄', undo: '移除了一隻居民', clear: '已清空居民' }[b.dataset.cmd]);
+  });
+  const st0 = read(STATE_KEY, null);
+  if (st0) { $('spd').value = st0.spd ?? 35; $('met').value = st0.met ?? 50; }
+  $('spd').onchange = () => send({ a: 'spd', v: +$('spd').value });
+  $('met').onchange = () => send({ a: 'met', v: +$('met').value });
+  function refresh() {
+    const b = read(BEAT_KEY, null), alive = b && Date.now() - b.t < 4000;
+    $('dot').classList.toggle('on', !!alive);
+    $('st').innerHTML = alive ? `桌布運作中 · 星球上有 <span class="count">${b.n}</span> 位居民` : '桌布目前沒有執行（開始功能表 → 星球桌布 → 啟動）';
+  }
+  refresh(); setInterval(refresh, 1000);
+
+  /* ---------- 行事曆 ---------- */
+  const WD = ['日', '一', '二', '三', '四', '五', '六'];
+  const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+  function loadCal() { const c = read(CAL_KEY, {}) || {}; return { events: Array.isArray(c.events) ? c.events : [], view: c.view && c.view.mode === 'fixed' ? c.view : { mode: 'auto' } }; }
+  function saveCal(c) { if (!write(CAL_KEY, c)) toast('無法儲存行事曆'); }
+  function viewYM(c) { const n = new Date(); return c.view.mode === 'fixed' ? [c.view.y, c.view.m] : [n.getFullYear(), n.getMonth()]; }
+  let color = '#a8432f';
+  let sel = ymd(new Date());
+  function setMonth(y, m) {
+    const d = new Date(y, m, 1), c = loadCal(), n = new Date();
+    c.view = { mode: 'fixed', y: d.getFullYear(), m: d.getMonth() };
+    saveCal(c);
+    const s = parse(sel);
+    if (s.getFullYear() !== d.getFullYear() || s.getMonth() !== d.getMonth())
+      sel = (d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth()) ? ymd(n) : ymd(d);
+    render();
+  }
+  $('mPrev').onclick = () => { const [y, m] = viewYM(loadCal()); setMonth(y, m - 1); };
+  $('mNext').onclick = () => { const [y, m] = viewYM(loadCal()); setMonth(y, m + 1); };
+  $('mNow').onclick = () => { const c = loadCal(); c.view = { mode: 'auto' }; saveCal(c); sel = ymd(new Date()); render(); toast('桌面會自動顯示當月'); };
+  document.querySelectorAll('.sw').forEach(b => b.onclick = () => {
+    color = b.dataset.c; document.querySelectorAll('.sw').forEach(x => x.classList.toggle('on', x === b));
+  });
+  $('eDate').onchange = () => { if ($('eDate').value) { sel = $('eDate').value; render(); } };
+  function addEvent() {
+    const title = $('eTitle').value.trim(), date = $('eDate').value;
+    if (!date) { toast('請先選日期'); return; }
+    if (!title) { toast('請輸入行程內容'); $('eTitle').focus(); return; }
+    const c = loadCal();
+    c.events.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), date, time: $('eTime').value || '', title, color });
+    saveCal(c);
+    $('eTitle').value = ''; $('eTime').value = '';
+    const d = parse(date);
+    toast(`已加入 ${d.getMonth() + 1}/${d.getDate()} 的行程`);
+    render();
+  }
+  $('eAdd').onclick = addEvent;
+  $('eTitle').addEventListener('keydown', e => { if (e.key === 'Enter') addEvent(); });
+  function render() {
+    const c = loadCal(), [y, m] = viewYM(c), today = ymd(new Date());
+    $('mName').textContent = `${y} 年 ${m + 1} 月`;
+    $('mMode').textContent = c.view.mode === 'fixed' ? '固定顯示此月' : '自動跟隨當月';
+    $('mMode').classList.toggle('fixed', c.view.mode === 'fixed');
+    $('eDate').value = sel;
+    const has = new Set(c.events.map(e => e.date));
+    const mini = $('mini'); mini.replaceChildren();
+    WD.forEach(w => { const h = document.createElement('div'); h.className = 'wd'; h.textContent = w; mini.append(h); });
+    const first = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate(), weeks = Math.ceil((first.getDay() + days) / 7);
+    for (let i = 0; i < weeks * 7; i++) {
+      const d = new Date(y, m, 1 - first.getDay() + i), k = ymd(d);
+      const b = document.createElement('button');
+      b.className = 'md' + (d.getMonth() !== m ? ' out' : '') + (d.getDay() === 0 ? ' sun' : d.getDay() === 6 ? ' sat' : '') + (k === today ? ' today' : '') + (k === sel ? ' sel' : '');
+      b.textContent = d.getDate();
+      if (has.has(k)) { const p = document.createElement('span'); p.className = 'pip'; b.append(p); }
+      b.onclick = () => { sel = k; render(); $('eTitle').focus(); };
+      mini.append(b);
+    }
+    const prefix = `${y}-${String(m + 1).padStart(2, '0')}-`;
+    const list = c.events.filter(e => e.date.startsWith(prefix)).sort((a, b) => (a.date + (a.time || '99')).localeCompare(b.date + (b.time || '99')));
+    $('listHead').textContent = `${m + 1} 月的行程（${list.length}）`;
+    const box = $('eList'); box.replaceChildren();
+    if (!list.length) { const e = document.createElement('div'); e.className = 'empty'; e.textContent = '這個月還沒有行程'; box.append(e); }
+    for (const e of list) {
+      const d = parse(e.date);
+      const row = document.createElement('div'); row.className = 'ev'; row.style.setProperty('--c', e.color || '#a8432f');
+      const bar = document.createElement('span'); bar.className = 'bar';
+      const when = document.createElement('div'); when.className = 'when';
+      when.textContent = `${d.getMonth() + 1}/${d.getDate()}（${WD[d.getDay()]}）` + (e.time ? `\n${e.time}` : '');
+      const what = document.createElement('div'); what.className = 'what'; what.textContent = e.title;
+      const del = document.createElement('button'); del.className = 'del'; del.title = '刪除這個行程'; del.textContent = '✕';
+      del.onclick = () => { const cc = loadCal(); cc.events = cc.events.filter(x => x.id !== e.id); saveCal(cc); toast('已刪除行程'); render(); };
+      row.append(bar, when, what, del); box.append(row);
+    }
+  }
+  render();
+  addEventListener('storage', e => { if (e.key === CAL_KEY) render(); if (e.key === DISPLAY_KEY) showDisp(); });
+</script>
+</body>
+</html>

@@ -1,5 +1,8 @@
 # 建置輸出（發佈用的 zip 放在各作品的 download/）
 dist/
+# 模型檢視頁與 Blender 預覽圖（只給作者檢查用）
+**/tools/viewer/
+preview_*.png
 # 個人資料與備份
 backup/
 data.json
