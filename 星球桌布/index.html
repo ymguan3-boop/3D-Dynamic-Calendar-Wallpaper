@@ -210,8 +210,8 @@
         <details class="calendar-export" id="cExport">
           <summary class="story-action" data-story-action="export">行程一次匯出</summary>
           <div class="export-range">
-            <label>起始日期<input type="date" data-export-start max="9999-12-31"></label>
-            <label>結束日期<input type="date" data-export-end max="9999-12-31"></label>
+            <label>起始日期<span class="export-date"><input type="date" data-export-start max="9999-12-31"><span class="export-date-format" aria-hidden="true">年/月/日</span></span></label>
+            <label>結束日期<span class="export-date"><input type="date" data-export-end max="9999-12-31"><span class="export-date-format" aria-hidden="true">年/月/日</span></span></label>
           </div>
           <p>起訖日皆包含，兩欄留空可匯出全部行程。</p>
           <button type="button" class="story-action" data-story-action="excel" data-export-download>匯出 Excel</button>

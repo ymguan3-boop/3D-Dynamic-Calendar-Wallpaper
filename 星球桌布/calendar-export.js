@@ -119,9 +119,18 @@
   }
 
   window.initCalendarExport = (form, loadEvents) => {
+    const startInput = form.querySelector('[data-export-start]');
+    const endInput = form.querySelector('[data-export-end]');
+    for (const input of [startInput, endInput]) {
+      const display = input.parentElement.querySelector('.export-date-format');
+      const updateDisplay = () => {
+        display.textContent = input.value ? input.value.replaceAll('-', '/') : '年/月/日';
+      };
+      input.addEventListener('input', updateDisplay);
+      input.addEventListener('change', updateDisplay);
+      updateDisplay();
+    }
     form.querySelector('[data-export-download]').addEventListener('click', () => {
-      const startInput = form.querySelector('[data-export-start]');
-      const endInput = form.querySelector('[data-export-end]');
       const start = startInput.value, end = endInput.value;
       const status = form.querySelector('[data-export-status]');
       if (!startInput.validity.valid || !endInput.validity.valid) { status.textContent = '請輸入有效的日期。'; return; }
